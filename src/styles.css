@@ -32,18 +32,29 @@ body {
 
 .navigation {
   align-content: flex-start;
-  background: linear-gradient(0deg, rgba(132, 244, 255, 0.25) 0%, rgba(131, 244, 254, 0) 30%);
-  border-bottom: 2px solid #84f4ff;
   color: #84f4ff;
   display: flex;
   font-weight: 600;
   flex-flow: row wrap;
   justify-content: flex-start;
+  margin-top: 5px;
+  text-shadow: 0 0 10px #84f4ff;
   text-transform: uppercase;
 }
 
 .navigation-tab {
+  clip-path: polygon(0% 15%, 5% 0%, 50% 0%, 53% 10%, 95% 10%, 100% 26%, 100% 100%, 3% 100%, 3% 45%, 0 35%);
   padding: 10px 20px;
+  background: linear-gradient(0deg, #84f4ff 0%, #01dbec 100%);
+  color: black;
+  margin: 0 5px;
+}
+
+.horizontal-divider {
+  background-color: #84f4ff;
+  box-shadow: 0 0 10px 1px #84f4ff;
+  height: 1px;
+  margin-top: -1px;
 }
 
 input,
