@@ -37,17 +37,33 @@ body {
   font-weight: 600;
   flex-flow: row wrap;
   justify-content: flex-start;
-  margin-top: 5px;
   text-shadow: 0 0 10px #84f4ff;
   text-transform: uppercase;
 }
 
-.navigation-tab {
-  clip-path: polygon(0% 15%, 5% 0%, 50% 0%, 53% 10%, 95% 10%, 100% 26%, 100% 100%, 3% 100%, 3% 45%, 0 35%);
+.tab {
+  background: transparent;
+  border-bottom: 3px solid transparent;
+  cursor: pointer;
   padding: 10px 20px;
-  background: linear-gradient(0deg, #84f4ff 0%, #01dbec 100%);
-  color: black;
-  margin: 0 5px;
+  transition: all 300ms ease-in-out;
+}
+
+.tab:not(.tab-active):hover {
+  background: radial-gradient(transparent 0%, rgba(1, 219, 236, 0.07) 100%);
+}
+
+.tab-active {
+  border-color: #84f4ff;
+  background: radial-gradient(transparent 0%, #01dbec54 100%);
+}
+
+.tab-content {
+  display: none;
+}
+
+.tab-content-active {
+  display: block;
 }
 
 .horizontal-divider {
