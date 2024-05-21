@@ -1,5 +1,5 @@
 :root {
-  font-family: Inter, Avenir, Helvetica, Arial, sans-serif;
+  font-family: Oxanium, sans-serif;
   font-size: 16px;
   line-height: 24px;
   font-weight: 400;
@@ -19,7 +19,7 @@ body {
 }
 
 .container {
-  background: radial-gradient(circle, rgba(25,61,56,1) 0%, rgba(4,0,25,1) 100%);
+  background: radial-gradient(circle, rgb(0, 44, 64) 0%, rgb(0, 1, 2) 100%);
   color: white;
   display: flex;
   flex-direction: column;
@@ -32,12 +32,14 @@ body {
 
 .navigation {
   align-content: flex-start;
-  background: linear-gradient(0deg, rgba(0,255,222,0.25) 0%, rgba(0,255,222,0) 40%);
-  border-bottom: 3px solid #00ffde;
-  color: #00ffde;
+  background: linear-gradient(0deg, rgba(132, 244, 255, 0.25) 0%, rgba(131, 244, 254, 0) 30%);
+  border-bottom: 2px solid #84f4ff;
+  color: #84f4ff;
   display: flex;
+  font-weight: 600;
   flex-flow: row wrap;
   justify-content: flex-start;
+  text-transform: uppercase;
 }
 
 .navigation-tab {
@@ -97,4 +99,46 @@ button {
   button:active {
     background-color: #0f0f0f69;
   }
+}
+
+@font-face {
+  font-family: Oxanium;
+  src: url(assets/fonts/oxanium/Oxanium-ExtraLight.woff2);
+  font-weight: 200;
+}
+
+@font-face {
+  font-family: Oxanium;
+  src: url(assets/fonts/oxanium/Oxanium-Light.woff2);
+  font-weight: 300;
+}
+
+@font-face {
+  font-family: Oxanium;
+  src: url(assets/fonts/oxanium/Oxanium-Regular.woff2);
+  font-weight: 400;
+}
+
+@font-face {
+  font-family: Oxanium;
+  src: url(assets/fonts/oxanium/Oxanium-Medium.woff2);
+  font-weight: 500;
+}
+
+@font-face {
+  font-family: Oxanium;
+  src: url(assets/fonts/oxanium/Oxanium-SemiBold.woff2);
+  font-weight: 600;
+}
+
+@font-face {
+  font-family: Oxanium;
+  src: url(assets/fonts/oxanium/Oxanium-Bold.woff2);
+  font-weight: 700;
+}
+
+@font-face {
+  font-family: Oxanium;
+  src: url(assets/fonts/oxanium/Oxanium-ExtraBold.woff2);
+  font-weight: 800;
 }
