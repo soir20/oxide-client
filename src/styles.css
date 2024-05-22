@@ -44,6 +44,11 @@ body {
   margin: 0;
 }
 
+p {
+  margin: 0;
+  max-width: 40em;
+}
+
 .container {
   background: radial-gradient(circle, var(--bg-highlight-color) 0%, var(--bg-color) 100%);
   color: white;
