@@ -30,8 +30,8 @@
 
 :root {
   font-family: Oxanium, sans-serif;
-  font-size: 16px;
-  line-height: 24px;
+  font-size: 1em;
+  line-height: 1.5em;
   font-weight: 400;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -52,7 +52,6 @@ body {
   height: 100vh;
   justify-content: flex-start;
   margin: 0;
-  text-align: center;
   width: 100%;
 }
 
@@ -86,6 +85,8 @@ body {
 
 .tab-content {
   display: none;
+  flex: 1 1;
+  padding: 25px;
 }
 
 .tab-content-active {
