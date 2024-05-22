@@ -4,19 +4,15 @@
     <meta charset="UTF-8" />
     <link rel="stylesheet" href="styles.css" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Tauri App</title>
-    <script type="module" src="/main.js" defer></script>
+    <title>Oxide</title>
+    <script type="module" src="./main.js" defer></script>
   </head>
 
   <body>
     <div class="container">
       <div class="navigation">
-        <a class="tab tab-active" id="tab-servers">
-          My Servers
-        </a>
-        <a class="tab" id="tab-settings">
-          Settings
-        </a>
+        <a class="tab tab-active i18n" id="tab-servers" data-i18n-key="tab_name_saved_servers"></a>
+        <a class="tab i18n" id="tab-settings" data-i18n-key="tab_name_settings"></a>
       </div>
 
       <div class="horizontal-divider"></div>
@@ -24,9 +20,7 @@
       <div class="navigation-spacer"></div>
 
       <div class="tab-content tab-content-active" id="tab-content-servers">
-        <p>
-          <b>Never join a server that includes paid items.</b> It's a scam! Look for another server where you can earn everything for free.
-        </p>
+        <p class="i18n" data-i18n-key="saved_servers_scam_warning"></p>
       </div>
       <div class="tab-content" id="tab-content-settings">Settings</div>
 
