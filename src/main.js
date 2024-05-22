@@ -58,4 +58,4 @@ function loadI18n(langId) {
   }
 }
 
-loadI18n("en_US")
+loadI18n("en-US")

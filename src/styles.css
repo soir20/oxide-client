@@ -1,34 +1,14 @@
-@property --holo-color {
-  syntax: "<color>";
-  inherits: false;
-  initial-value: #84f4ff;
-}
-
-@property --active-tab-color {
-  syntax: "<color>";
-  inherits: false;
-  initial-value: #01dbec54;
-}
-
-@property --hover-tab-color {
-  syntax: "<color>";
-  inherits: false;
-  initial-value: #01dbec12;
-}
-
-@property --bg-highlight-color {
-  syntax: "<color>";
-  inherits: false;
-  initial-value: #002C40;
-}
-
-@property --bg-color {
-  syntax: "<color>";
-  inherits: false;
-  initial-value: #000102;
-}
-
 :root {
+  --holo-color: #84f4ff;
+  --holo-bg-color: #01dbec54;
+  --holo-bg: radial-gradient(transparent 0%, var(--holo-bg-color) 100%);
+  --holo-bg-color-light: #01dbec12;
+  --holo-bg-light: radial-gradient(transparent 0%, var(--holo-bg-color-light) 100%);
+  --bg-highlight-color: #002C40;
+  --bg-color: #000102;
+  --default-transition: all 300ms ease-in-out;
+  --holo-glow-shadow: 0 0 10px 1px var(--holo-color);
+
   font-family: Oxanium, sans-serif;
   font-size: 1em;
   line-height: 1.5em;
@@ -41,6 +21,9 @@
 }
 
 body {
+  background: radial-gradient(circle, var(--bg-highlight-color) 0%, var(--bg-color) 100%);
+  background-color: var(--bg-color);
+  color: white;
   margin: 0;
 }
 
@@ -50,11 +33,8 @@ p {
 }
 
 .container {
-  background: radial-gradient(circle, var(--bg-highlight-color) 0%, var(--bg-color) 100%);
-  color: white;
   display: flex;
   flex-direction: column;
-  height: 100vh;
   justify-content: flex-start;
   margin: 0;
   width: 100%;
@@ -76,16 +56,16 @@ p {
   border-bottom: 3px solid transparent;
   cursor: pointer;
   padding: 10px 20px;
-  transition: all 300ms ease-in-out;
+  transition: var(--default-transition);
 }
 
 .tab:not(.tab-active):hover {
-  background: radial-gradient(transparent 0%, var(--hover-tab-color) 100%);
+  background: var(--holo-bg-light);
 }
 
 .tab-active {
   border-color: var(--holo-color);
-  background: radial-gradient(transparent 0%, var(--active-tab-color) 100%);
+  background: var(--holo-bg);
 }
 
 .tab-content {
@@ -95,14 +75,41 @@ p {
 }
 
 .tab-content-active {
-  display: block;
+  display: flex;
+  flex-direction: column;
 }
 
 .horizontal-divider {
   background-color: var(--holo-color);
-  box-shadow: 0 0 10px 1px var(--holo-color);
+  box-shadow: var(--holo-glow-shadow);
   height: 1px;
   margin-top: -1px;
+}
+
+/* Remove all default styling for lists */
+#saved-servers, #saved-servers li {
+  list-style-position: inside;
+  list-style-type: none;
+  margin: 0;
+  padding: 0;
+}
+
+#saved-servers {
+  flex: 1 1;
+  margin-top: 25px;
+}
+
+#saved-servers li {
+  background: var(--holo-bg);
+  border: 1px solid var(--holo-bg-color);
+  cursor: pointer;
+  padding: 10px 20px;
+  transition: var(--default-transition);
+}
+
+#saved-servers li:hover {
+  border-color: var(--holo-color);
+  box-shadow: var(--holo-glow-shadow);
 }
 
 @font-face {
