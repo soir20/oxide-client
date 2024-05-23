@@ -13,6 +13,19 @@
   "tauri": {
     "allowlist": {
       "all": false,
+      "fs": {
+        "readFile": true,
+        "writeFile": true,
+        "createDir": true,
+        "scope": [
+          "$APPDATA/**",
+          "$APPDATA/*",
+          "$APPDATA"
+        ]
+      },
+      "path": {
+        "all": true
+      },
       "shell": {
         "all": false,
         "open": true
