@@ -3,6 +3,15 @@ const { BaseDirectory, createDir, readTextFile, writeTextFile } = window.__TAURI
 const { appDataDir } = window.__TAURI__.path
 import { LANGUAGES } from './i18n.js'
 
+async function writeTextToAppData(fileName, text) {
+  await createDir(await appDataDir(), { recursive: true })
+  await writeTextFile(fileName, text, { dir: BaseDirectory.AppData })
+}
+
+function prettyPrintJson(jsonObject) {
+  return JSON.stringify(jsonObject, null, 2)
+}
+
 // Tab functionality
 const TAB_PREFIX = 'tab-'
 const TAB_CONTENT_PREFIX = 'tab-content-'
@@ -63,6 +72,7 @@ function loadI18n(langId) {
 }
 
 // Saved server read/write
+const SAVED_SERVERS_LIST_ID = 'saved-servers'
 const SAVED_SERVERS_FILE = 'saved-servers.json'
 let savedServers = []
 function buildSavedServerElement(savedServer) {
@@ -71,26 +81,37 @@ function buildSavedServerElement(savedServer) {
   return serverElm
 }
 
-async function loadSavedServers(parent) {
+async function loadSavedServers() {
   try {
     savedServers = JSON.parse(await readTextFile(SAVED_SERVERS_FILE, { dir: BaseDirectory.AppData }))
   } catch (err) {
     console.error('Unable to read saved servers', err)
   }
 
+  const savedServersElm = document.getElementById(SAVED_SERVERS_LIST_ID)
   for (const savedServer of savedServers) {
-    parent.append(buildSavedServerElement(savedServer))
+    savedServersElm.append(buildSavedServerElement(savedServer))
   }
+}
+
+async function addSavedServer(nickname, gameServerAddr, authServerAddr) {
+  const savedServer = { nickname, gameServerAddr, authServerAddr }
+  savedServers.unshift(savedServer)
+  const savedServersElm = document.getElementById(SAVED_SERVERS_LIST_ID)
+  savedServersElm.prepend(buildSavedServerElement(savedServer))
+
+  await writeTextToAppData(SAVED_SERVERS_FILE, prettyPrintJson(savedServers))
 }
 
 async function main() {
   initTabs()
   loadI18n('en-US')
+  await loadSavedServers()
 
-  await createDir(await appDataDir(), { recursive: true })
-  //await writeTextFile('saved-servers.json', '[ { "hello": "world" } ]', { dir: BaseDirectory.AppData })
-
-  await loadSavedServers(document.getElementById('saved-servers'))
+  document.getElementById('create-saved-server-btn').addEventListener('click', (e) => {
+    e.preventDefault()
+    addSavedServer("My Test Server", "Hello world", "Test")
+  })
 }
 
 await main()
