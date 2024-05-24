@@ -52,8 +52,14 @@ function loadI18n(langId) {
 
 // Saved server read/write
 const SAVED_SERVERS_FILE = 'saved-servers.json'
+let savedServers = []
+function buildSavedServerElement(savedServer) {
+  const serverElm = document.createElement('li')
+  serverElm.textContent = savedServer.nickname
+  return serverElm
+}
+
 async function loadSavedServers(parent) {
-  let savedServers
   try {
     savedServers = JSON.parse(await readTextFile(SAVED_SERVERS_FILE, { dir: BaseDirectory.AppData }))
   } catch (err) {
@@ -61,9 +67,7 @@ async function loadSavedServers(parent) {
   }
 
   for (const savedServer of savedServers) {
-    const serverElm = document.createElement('li')
-    serverElm.textContent = savedServer.nickname
-    parent.append(serverElm)
+    parent.append(buildSavedServerElement(savedServer))
   }
 }
 
