@@ -1,51 +1,43 @@
 const { invoke } = window.__TAURI__.tauri
+const { BaseDirectory, createDir, readTextFile, writeTextFile } = window.__TAURI__.fs
+const { appDataDir } = window.__TAURI__.path
+import { LANGUAGES } from './i18n.js'
 
 // Tab functionality
-const tabPrefix = "tab-"
-const tabContentPrefix = "tab-content-"
+const TAB_PREFIX = 'tab-'
+const TAB_CONTENT_PREFIX = 'tab-content-'
 
-let activeTabName = "servers"
-for (const tab of document.querySelectorAll(".tab")) {
-  tab.addEventListener("click", (e) => {
-    e.preventDefault()
-    if (!tab.id.startsWith(tabPrefix)) {
-      throw Error(`Tab ID ${tab.id} is missing tab prefix "${tabContentPrefix}"`)
-    }
-    changeTab(tab.id.replace(tabPrefix, ""))
-  })
-}
-
+let activeTabName = 'servers'
 function changeTab(tabName) {
-  const oldTab = document.querySelector(`#${tabPrefix}${activeTabName}`)
-  oldTab.classList.remove(`${tabPrefix}active`)
+  const oldTab = document.querySelector(`#${TAB_PREFIX}${activeTabName}`)
+  oldTab.classList.remove(`${TAB_PREFIX}active`)
 
-  const oldContent = document.querySelector(`#${tabContentPrefix}${activeTabName}`)
+  const oldContent = document.querySelector(`#${TAB_CONTENT_PREFIX}${activeTabName}`)
   if (!oldContent) {
     throw new Error(`Tab ${activeTabName} is missing content`)
   }
-  oldContent.classList.remove(`${tabContentPrefix}active`)
+  oldContent.classList.remove(`${TAB_CONTENT_PREFIX}active`)
 
-  const newTab = document.querySelector(`#${tabPrefix}${tabName}`)
-  newTab.classList.add(`${tabPrefix}active`)
+  const newTab = document.querySelector(`#${TAB_PREFIX}${tabName}`)
+  newTab.classList.add(`${TAB_PREFIX}active`)
 
-  const newContent = document.querySelector(`#${tabContentPrefix}${tabName}`)
+  const newContent = document.querySelector(`#${TAB_CONTENT_PREFIX}${tabName}`)
   if (!newContent) {
     throw new Error(`Tab ${tabName} is missing content`)
   }
-  newContent.classList.add(`${tabContentPrefix}active`)
+  newContent.classList.add(`${TAB_CONTENT_PREFIX}active`)
 
   activeTabName = tabName
 }
 
 // Internationalization
-import { LANGUAGES } from './i18n.js'
 function loadI18n(langId) {
   if (!(langId in LANGUAGES)) {
     throw new Error(`Unknown language ${langId}`)
   }
 
-  for (const elm of document.querySelectorAll(".i18n")) {
-    const key = elm.getAttribute("data-i18n-key")
+  for (const elm of document.querySelectorAll('.i18n')) {
+    const key = elm.getAttribute('data-i18n-key')
     if (!key) {
       throw new Error(`Element ${elm.localName} (id: ${elm.id}) is missing i18n key`)
     }
@@ -58,4 +50,40 @@ function loadI18n(langId) {
   }
 }
 
-loadI18n("en-US")
+// Saved server read/write
+const SAVED_SERVERS_FILE = 'saved-servers.json'
+async function loadSavedServers(parent) {
+  let savedServers
+  try {
+    savedServers = JSON.parse(await readTextFile(SAVED_SERVERS_FILE, { dir: BaseDirectory.AppData }))
+  } catch (err) {
+    console.error('Unable to read saved servers', err)
+  }
+
+  for (const savedServer of savedServers) {
+    const serverElm = document.createElement('li')
+    serverElm.textContent = savedServer.nickname
+    parent.append(serverElm)
+  }
+}
+
+async function main() {
+  for (const tab of document.querySelectorAll('.tab')) {
+    tab.addEventListener('click', (e) => {
+      e.preventDefault()
+      if (!tab.id.startsWith(TAB_PREFIX)) {
+        throw Error(`Tab ID ${tab.id} is missing tab prefix '${TAB_CONTENT_PREFIX}'`)
+      }
+      changeTab(tab.id.replace(TAB_PREFIX, ''))
+    })
+  }
+
+  loadI18n('en-US')
+
+  await createDir(await appDataDir(), { recursive: true })
+  //await writeTextFile('saved-servers.json', '[ { "hello": "world" } ]', { dir: BaseDirectory.AppData })
+
+  await loadSavedServers(document.getElementById('saved-servers'))
+}
+
+await main()
