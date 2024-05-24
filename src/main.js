@@ -30,6 +30,18 @@ function changeTab(tabName) {
   activeTabName = tabName
 }
 
+function initTabs() {
+  for (const tab of document.querySelectorAll('.tab')) {
+    tab.addEventListener('click', (e) => {
+      e.preventDefault()
+      if (!tab.id.startsWith(TAB_PREFIX)) {
+        throw Error(`Tab ID ${tab.id} is missing tab prefix '${TAB_CONTENT_PREFIX}'`)
+      }
+      changeTab(tab.id.replace(TAB_PREFIX, ''))
+    })
+  }
+}
+
 // Internationalization
 function loadI18n(langId) {
   if (!(langId in LANGUAGES)) {
@@ -72,16 +84,7 @@ async function loadSavedServers(parent) {
 }
 
 async function main() {
-  for (const tab of document.querySelectorAll('.tab')) {
-    tab.addEventListener('click', (e) => {
-      e.preventDefault()
-      if (!tab.id.startsWith(TAB_PREFIX)) {
-        throw Error(`Tab ID ${tab.id} is missing tab prefix '${TAB_CONTENT_PREFIX}'`)
-      }
-      changeTab(tab.id.replace(TAB_PREFIX, ''))
-    })
-  }
-
+  initTabs()
   loadI18n('en-US')
 
   await createDir(await appDataDir(), { recursive: true })
