@@ -102,9 +102,11 @@ function buildSavedServerElement(savedServer, isEditing) {
   nicknameContainer.classList.add('saved-server-nickname-container')
   serverElm.append(nicknameContainer)
 
-  const nickname = document.createElement('div')
+  const nickname = document.createElement('input')
   nickname.classList.add('saved-server-nickname')
-  nickname.textContent = savedServer.nickname
+  nickname.disabled = true
+  nickname.type = 'text'
+  nickname.value = savedServer.nickname
   nicknameContainer.append(nickname)
 
   const buttonContainer = document.createElement('div')
@@ -118,17 +120,21 @@ function buildSavedServerElement(savedServer, isEditing) {
   // Edit container
   const editContainer = document.createElement('div')
   editContainer.classList.add('edit-container')
+
+  const toggleEdit = () => {
+    editButton.classList.toggle('edit-button-open')
+    editContainer.classList.toggle('edit-container-open')
+    nickname.disabled = !nickname.disabled
+    nickname.classList.toggle('saved-server-nickname-edit')
+  }
+
   if (isEditing) {
-    editButton.classList.add('edit-button-open')
-    editContainer.classList.add('edit-container-open')
+    toggleEdit()
   }
   serverElm.append(editContainer)
   editContainer.textContent = "TEST"
 
-  editButton.addEventListener('click', (_) => {
-    editButton.classList.toggle('edit-button-open')
-    editContainer.classList.toggle('edit-container-open')
-  })
+  editButton.addEventListener('click', (_) => toggleEdit())
 
   loadI18n(currentLanguage, serverElm)
 

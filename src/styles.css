@@ -157,7 +157,24 @@ p {
 }
 
 .saved-server-nickname {
+  background-color: transparent;
+  border: 1px solid transparent;
+  color: unset;
+  cursor: default;
+  display: block;
   flex: 1 1;
+  font-family: unset;
+  font-size: unset;
+  font-weight: unset;
+  margin-right: 20px;
+  padding: 5px;
+}
+
+.saved-server-nickname-edit {
+  background-color: var(--bg-color);
+  border: 1px solid var(--holo-bg-color);
+  color: white;
+  cursor: text;
 }
 
 .edit-container {
