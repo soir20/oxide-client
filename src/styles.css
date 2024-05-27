@@ -141,7 +141,7 @@ p {
 #saved-servers > li {
   background: var(--holo-bg);
   border: 1px solid var(--holo-bg-color);
-  cursor: pointer;
+  cursor: grab;
   padding: 10px 20px;
   transition: var(--default-transition);
 }
@@ -160,7 +160,7 @@ p {
   background-color: transparent;
   border: 1px solid transparent;
   color: unset;
-  cursor: default;
+  cursor: inherit;
   display: block;
   flex: 1 1;
   font-family: unset;
