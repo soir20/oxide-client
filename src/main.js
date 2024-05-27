@@ -1,4 +1,5 @@
 const { invoke } = window.__TAURI__.tauri
+const { message } = window.__TAURI__.dialog
 const { BaseDirectory, createDir, readTextFile, writeTextFile } = window.__TAURI__.fs
 const { appDataDir } = window.__TAURI__.path
 import { LANGUAGES } from './i18n.js'
@@ -6,8 +7,19 @@ import { LANGUAGES } from './i18n.js'
 let currentLanguage = 'en-US'
 
 async function writeTextToAppData(fileName, text) {
-  await createDir(await appDataDir(), { recursive: true })
-  await writeTextFile(fileName, text, { dir: BaseDirectory.AppData })
+  try {
+    await createDir(await appDataDir(), {recursive: true})
+    await writeTextFile(fileName, text, {dir: BaseDirectory.AppData})
+  } catch (err) {
+    console.error('Unable to write saved servers', err)
+    message(
+      `${getI18nValueForKey(currentLanguage, 'saved-servers-write-failed')}\n${err}`,
+      {
+        okLabel: getI18nValueForKey(currentLanguage, 'ok'),
+        type: 'error'
+      }
+    )
+  }
 }
 
 function prettyPrintJson(jsonObject) {
@@ -54,6 +66,14 @@ function initTabs() {
 }
 
 // Internationalization
+function getI18nValueForKey(langId, key) {
+  if (!LANGUAGES[langId][key]) {
+    throw new Error(`Unknown i18n key ${key} for language ${langId}`)
+  }
+
+  return LANGUAGES[langId][key]
+}
+
 function loadI18n(langId, parent) {
   if (!(langId in LANGUAGES)) {
     throw new Error(`Unknown language ${langId}`)
@@ -65,11 +85,7 @@ function loadI18n(langId, parent) {
       throw new Error(`Element ${elm.localName} (id: ${elm.id}) is missing i18n key`)
     }
 
-    if (!LANGUAGES[langId][key]) {
-      throw new Error(`Unknown i18n key ${key} for language ${langId}`)
-    }
-
-    elm.innerHTML = LANGUAGES[langId][key]
+    elm.innerHTML = getI18nValueForKey(currentLanguage, key)
   }
 }
 
