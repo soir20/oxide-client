@@ -3,6 +3,8 @@ const { BaseDirectory, createDir, readTextFile, writeTextFile } = window.__TAURI
 const { appDataDir } = window.__TAURI__.path
 import { LANGUAGES } from './i18n.js'
 
+let currentLanguage = 'en-US'
+
 async function writeTextToAppData(fileName, text) {
   await createDir(await appDataDir(), { recursive: true })
   await writeTextFile(fileName, text, { dir: BaseDirectory.AppData })
@@ -52,12 +54,12 @@ function initTabs() {
 }
 
 // Internationalization
-function loadI18n(langId) {
+function loadI18n(langId, parent) {
   if (!(langId in LANGUAGES)) {
     throw new Error(`Unknown language ${langId}`)
   }
 
-  for (const elm of document.querySelectorAll('.i18n')) {
+  for (const elm of parent.querySelectorAll('.i18n')) {
     const key = elm.getAttribute('data-i18n-key')
     if (!key) {
       throw new Error(`Element ${elm.localName} (id: ${elm.id}) is missing i18n key`)
@@ -75,10 +77,36 @@ function loadI18n(langId) {
 const SAVED_SERVERS_LIST_ID = 'saved-servers'
 const SAVED_SERVERS_FILE = 'saved-servers.json'
 let savedServers = []
-function buildSavedServerElement(savedServer) {
+function buildSavedServerElement(savedServer, isEditing) {
   const serverElm = document.createElement('li')
-  serverElm.textContent = savedServer.nickname
   serverElm.draggable = true
+
+  // Nickname container
+  const nicknameContainer = document.createElement('div')
+  nicknameContainer.textContent = savedServer.nickname
+  nicknameContainer.classList.add('saved-server-nickname-container')
+  serverElm.append(nicknameContainer)
+
+  const editButton = document.createElement('button')
+  editButton.classList.add('i18n')
+  editButton.setAttribute('data-i18n-key', 'saved-servers-edit')
+  nicknameContainer.append(editButton)
+
+  // Edit container
+  const editContainer = document.createElement('div')
+  editContainer.classList.add('edit-container')
+  if (isEditing) {
+    editContainer.classList.add('edit-container-open')
+  }
+  serverElm.append(editContainer)
+  editContainer.textContent = "TEST"
+
+  editButton.addEventListener('click', (_) => {
+    editContainer.classList.toggle('edit-container-open')
+  })
+
+  loadI18n(currentLanguage, serverElm)
+
   return serverElm
 }
 
@@ -91,7 +119,7 @@ async function loadSavedServers() {
 
   const savedServersElm = document.getElementById(SAVED_SERVERS_LIST_ID)
   for (const savedServer of savedServers) {
-    savedServersElm.append(buildSavedServerElement(savedServer))
+    savedServersElm.append(buildSavedServerElement(savedServer, false))
   }
 }
 
@@ -99,7 +127,7 @@ async function addSavedServer(nickname, gameServerAddr, authServerAddr) {
   const savedServer = { nickname, gameServerAddr, authServerAddr }
   savedServers.unshift(savedServer)
   const savedServersElm = document.getElementById(SAVED_SERVERS_LIST_ID)
-  savedServersElm.prepend(buildSavedServerElement(savedServer))
+  savedServersElm.prepend(buildSavedServerElement(savedServer, true))
 
   await writeTextToAppData(SAVED_SERVERS_FILE, prettyPrintJson(savedServers))
 }
@@ -175,7 +203,7 @@ let x = 0
 async function main() {
   initTabs()
   initDraggableList(document.getElementById('saved-servers'), reorderSavedServers)
-  loadI18n('en-US')
+  loadI18n(currentLanguage, document)
   await loadSavedServers()
 
   document.getElementById('create-saved-server-btn').addEventListener('click', (e) => {

@@ -3,6 +3,7 @@ export const LANGUAGES = {
         "tab-name-saved-servers": "My Servers",
         "tab-name-settings": "Settings",
         "saved-servers-scam-warning": "<b>Never join a server that includes paid items.</b> It's a scam! Look for another server where you can earn everything for free.",
-        "saved-servers-add-server-btn": "Add server"
+        "saved-servers-add-server-btn": "Add server",
+        "saved-servers-edit": "Edit"
     }
 }
