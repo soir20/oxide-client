@@ -88,17 +88,23 @@ p {
 }
 
 #create-saved-server-btn {
-  background: var(--holo-bg);
-  border: none;
+  background: var(--holo-bg-color-light);
+  border: 1px solid var(--holo-bg-color);
   border-radius: 5px;
   color: var(--holo-color);
   cursor: pointer;
+  display: inline-block;
   font-weight: 600;
   margin-top: 15px;
-  padding: 5px 16px;
+  padding: 10px 20px;
   text-shadow: var(--holo-text-glow-shadow);
   text-transform: uppercase;
+  transition: var(--default-transition);
   width: fit-content;
+}
+
+#create-saved-server-btn:hover {
+  background: var(--holo-bg);
 }
 
 /* Remove all default styling for lists */
@@ -116,14 +122,20 @@ p {
 
 #saved-servers button {
   background-color: var(--bg-color);
-  border: none;
+  border: 1px solid var(--holo-bg-color);
   border-radius: 5px;
   color: var(--holo-color);
   cursor: pointer;
+  display: inline-block;
   font-weight: 600;
   padding: 5px 16px;
+  transition: var(--default-transition);
   text-shadow: var(--holo-text-glow-shadow);
   text-transform: uppercase;
+}
+
+#saved-servers button:hover {
+  background-color: var(--bg-highlight-color);
 }
 
 #saved-servers > li {
@@ -139,8 +151,13 @@ p {
   box-shadow: var(--holo-glow-shadow);
 }
 
-.saved-server-nickname-container > button {
-  float: right;
+.saved-server-nickname-container {
+  display: flex;
+  flex-direction: row;
+}
+
+.saved-server-nickname {
+  flex: 1 1;
 }
 
 .edit-container {
@@ -149,6 +166,10 @@ p {
 
 .edit-container-open {
   display: block;
+}
+
+.edit-button-open {
+  background-color: var(--bg-highlight-color) !important;
 }
 
 .draggable-list > * {

@@ -83,14 +83,21 @@ function buildSavedServerElement(savedServer, isEditing) {
 
   // Nickname container
   const nicknameContainer = document.createElement('div')
-  nicknameContainer.textContent = savedServer.nickname
   nicknameContainer.classList.add('saved-server-nickname-container')
   serverElm.append(nicknameContainer)
+
+  const nickname = document.createElement('div')
+  nickname.classList.add('saved-server-nickname')
+  nickname.textContent = savedServer.nickname
+  nicknameContainer.append(nickname)
+
+  const buttonContainer = document.createElement('div')
+  nicknameContainer.append(buttonContainer)
 
   const editButton = document.createElement('button')
   editButton.classList.add('i18n')
   editButton.setAttribute('data-i18n-key', 'saved-servers-edit')
-  nicknameContainer.append(editButton)
+  buttonContainer.append(editButton)
 
   // Edit container
   const editContainer = document.createElement('div')
@@ -102,6 +109,7 @@ function buildSavedServerElement(savedServer, isEditing) {
   editContainer.textContent = "TEST"
 
   editButton.addEventListener('click', (_) => {
+    editButton.classList.toggle('edit-button-open')
     editContainer.classList.toggle('edit-container-open')
   })
 
