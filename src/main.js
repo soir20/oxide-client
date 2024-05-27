@@ -6,6 +6,14 @@ import { LANGUAGES } from './i18n.js'
 
 let currentLanguage = 'en-US'
 
+function debounce(callback, wait) {
+  let timeoutId = null
+  return (...args) => {
+    window.clearTimeout(timeoutId)
+    timeoutId = window.setTimeout(() => callback(...args), wait)
+  }
+}
+
 async function writeTextToAppData(fileName, text) {
   try {
     await createDir(await appDataDir(), {recursive: true})
@@ -93,7 +101,12 @@ function loadI18n(langId, parent) {
 const SAVED_SERVERS_LIST_ID = 'saved-servers'
 const SAVED_SERVERS_FILE = 'saved-servers.json'
 let savedServers = []
-function buildSavedServerElement(savedServer, isEditing) {
+
+function serverIndex(savedServersElm, currentElm) {
+  return Array.from(savedServersElm.children).indexOf(currentElm)
+}
+
+function buildSavedServerElement(savedServersElm, savedServer, isEditing) {
   const serverElm = document.createElement('li')
   serverElm.draggable = true
 
@@ -104,9 +117,18 @@ function buildSavedServerElement(savedServer, isEditing) {
 
   const nickname = document.createElement('input')
   nickname.classList.add('saved-server-nickname')
+  nickname.name = "saved-server-nickname"
   nickname.disabled = true
   nickname.type = 'text'
   nickname.value = savedServer.nickname
+  nickname.addEventListener('input', debounce(
+    async (event) => {
+      console.log(event.target.value)
+      savedServers[serverIndex(savedServersElm, serverElm)].nickname = event.target.value
+      await saveServerList()
+    },
+    500
+  ))
   nicknameContainer.append(nickname)
 
   const buttonContainer = document.createElement('div')
@@ -150,24 +172,28 @@ async function loadSavedServers() {
 
   const savedServersElm = document.getElementById(SAVED_SERVERS_LIST_ID)
   for (const savedServer of savedServers) {
-    savedServersElm.append(buildSavedServerElement(savedServer, false))
+    savedServersElm.append(buildSavedServerElement(savedServersElm, savedServer, false))
   }
+}
+
+async function saveServerList() {
+  await writeTextToAppData(SAVED_SERVERS_FILE, prettyPrintJson(savedServers))
 }
 
 async function addSavedServer(nickname, gameServerAddr, authServerAddr) {
   const savedServer = { nickname, gameServerAddr, authServerAddr }
   savedServers.unshift(savedServer)
   const savedServersElm = document.getElementById(SAVED_SERVERS_LIST_ID)
-  savedServersElm.prepend(buildSavedServerElement(savedServer, true))
+  savedServersElm.prepend(buildSavedServerElement(savedServersElm, savedServer, true))
 
-  await writeTextToAppData(SAVED_SERVERS_FILE, prettyPrintJson(savedServers))
+  await saveServerList()
 }
 
 async function reorderSavedServers(previousIndex, newIndex) {
   let server = savedServers[previousIndex]
   savedServers.splice(previousIndex, 1)
   savedServers.splice(newIndex, 0, server)
-  await writeTextToAppData(SAVED_SERVERS_FILE, prettyPrintJson(savedServers))
+  await saveServerList()
 }
 
 function initDraggableList(parentList, callback) {
@@ -177,7 +203,7 @@ function initDraggableList(parentList, callback) {
 
   parentList.addEventListener('dragstart', (event) => {
     currentElement = event.target
-    previousIndex = Array.from(parentList.children).indexOf(currentElement)
+    previousIndex = serverIndex(parentList, currentElement)
     setTimeout(() => {
       event.target.classList.add('dragged')
     }, 0)
@@ -185,7 +211,7 @@ function initDraggableList(parentList, callback) {
 
   parentList.addEventListener('dragend', async (event) => {
     let previousIndexCopy = previousIndex
-    let newIndex = Array.from(parentList.children).indexOf(event.target)
+    let newIndex = serverIndex(parentList, event.target)
     setTimeout(() => {
       event.target.classList.remove('dragged')
       currentElement = null
@@ -233,7 +259,7 @@ function initDraggableList(parentList, callback) {
 let x = 0
 async function main() {
   initTabs()
-  initDraggableList(document.getElementById('saved-servers'), reorderSavedServers)
+  initDraggableList(document.getElementById(SAVED_SERVERS_LIST_ID), reorderSavedServers)
   loadI18n(currentLanguage, document)
   await loadSavedServers()
 
