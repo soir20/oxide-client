@@ -99,7 +99,7 @@ p {
   margin-top: 25px;
 }
 
-#saved-servers li {
+#saved-servers > li {
   background: var(--holo-bg);
   border: 1px solid var(--holo-bg-color);
   cursor: pointer;
@@ -107,9 +107,18 @@ p {
   transition: var(--default-transition);
 }
 
-#saved-servers li:hover {
+#saved-servers > .dragged {
   border-color: var(--holo-color);
   box-shadow: var(--holo-glow-shadow);
+}
+
+.draggable-list > * {
+  cursor: grab;
+  opacity: 100%;
+}
+
+.dragged {
+  opacity: 50%;
 }
 
 @font-face {

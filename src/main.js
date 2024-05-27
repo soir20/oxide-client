@@ -78,6 +78,7 @@ let savedServers = []
 function buildSavedServerElement(savedServer) {
   const serverElm = document.createElement('li')
   serverElm.textContent = savedServer.nickname
+  serverElm.draggable = true
   return serverElm
 }
 
@@ -103,14 +104,83 @@ async function addSavedServer(nickname, gameServerAddr, authServerAddr) {
   await writeTextToAppData(SAVED_SERVERS_FILE, prettyPrintJson(savedServers))
 }
 
+async function reorderSavedServers(previousIndex, newIndex) {
+  let server = savedServers[previousIndex]
+  savedServers.splice(previousIndex, 1)
+  savedServers.splice(newIndex, 0, server)
+  await writeTextToAppData(SAVED_SERVERS_FILE, prettyPrintJson(savedServers))
+}
+
+function initDraggableList(parentList, callback) {
+  parentList.classList.add('draggable-list')
+  let currentElement = null
+  let previousIndex = null
+
+  parentList.addEventListener('dragstart', (event) => {
+    currentElement = event.target
+    previousIndex = Array.from(parentList.children).indexOf(currentElement)
+    setTimeout(() => {
+      event.target.classList.add('dragged')
+    }, 0)
+  })
+
+  parentList.addEventListener('dragend', async (event) => {
+    let previousIndexCopy = previousIndex
+    let newIndex = Array.from(parentList.children).indexOf(event.target)
+    setTimeout(() => {
+      event.target.classList.remove('dragged')
+      currentElement = null
+      previousIndex = null
+    }, 0)
+
+    if (previousIndexCopy !== null) {
+      await callback(previousIndexCopy, newIndex)
+    }
+  })
+
+  parentList.addEventListener('dragover', (event) => {
+    event.preventDefault()
+    const nextElement = getNextElement(parentList, event.clientY)
+    if (nextElement == null) {
+      parentList.appendChild(currentElement)
+    } else {
+      parentList.insertBefore(currentElement, nextElement)
+    }
+  })
+
+  function getNextElement(container, y) {
+    const draggableElements = [...parentList.children]
+
+    return draggableElements.reduce(
+      (closest, child) => {
+        const box = child.getBoundingClientRect()
+        const offset = y - box.top - box.height / 2
+        if (offset < 0 && offset > closest.offset) {
+          return {
+            offset: offset,
+            element: child,
+          }
+        } else {
+          return closest
+        }
+      },
+      {
+        offset: Number.NEGATIVE_INFINITY,
+      }
+    ).element
+  }
+}
+
+let x = 0
 async function main() {
   initTabs()
+  initDraggableList(document.getElementById('saved-servers'), reorderSavedServers)
   loadI18n('en-US')
   await loadSavedServers()
 
   document.getElementById('create-saved-server-btn').addEventListener('click', (e) => {
     e.preventDefault()
-    addSavedServer("My Test Server", "Hello world", "Test")
+    addSavedServer(`My Test Server${x++}`, "Hello world", "Test")
   })
 }
 
