@@ -103,6 +103,7 @@ function buildSavedServerElement(savedServer, isEditing) {
   const editContainer = document.createElement('div')
   editContainer.classList.add('edit-container')
   if (isEditing) {
+    editButton.classList.add('edit-button-open')
     editContainer.classList.add('edit-container-open')
   }
   serverElm.append(editContainer)
