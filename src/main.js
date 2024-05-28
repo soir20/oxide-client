@@ -229,8 +229,8 @@ async function saveServerList() {
   await writeTextToAppData(SAVED_SERVERS_FILE, prettyPrintJson(savedServers))
 }
 
-async function addSavedServer(nickname, gameServerAddr, authServerAddr) {
-  const savedServer = { nickname, gameServerAddr, authServerAddr }
+async function addSavedServer(nickname) {
+  const savedServer = { nickname }
   savedServers.unshift(savedServer)
   const savedServersElm = document.getElementById(SAVED_SERVERS_LIST_ID)
   savedServersElm.prepend(buildSavedServerElement(savedServersElm, savedServer, true))
@@ -315,7 +315,7 @@ async function main() {
 
   document.getElementById('create-saved-server-btn').addEventListener('click', (e) => {
     e.preventDefault()
-    addSavedServer(`My Test Server${x++}`, "Hello world", "Test")
+    addSavedServer(`My Test Server${x++}`)
   })
 }
 
