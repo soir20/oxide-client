@@ -3,6 +3,7 @@ const { message } = window.__TAURI__.dialog
 const { BaseDirectory, createDir, readTextFile, writeTextFile } = window.__TAURI__.fs
 const { appDataDir, resolveResource } = window.__TAURI__.path
 
+const I18N_KEY_ATTR = 'data-i18n-key'
 const LANGUAGES = {}
 let currentLanguage = 'en-US'
 
@@ -92,7 +93,7 @@ function loadI18n(langId, parent) {
   }
 
   for (const elm of parent.querySelectorAll('.i18n')) {
-    const key = elm.getAttribute('data-i18n-key')
+    const key = elm.getAttribute(I18N_KEY_ATTR)
     if (!key) {
       throw new Error(`Element ${elm.localName} (id: ${elm.id}) is missing i18n key`)
     }
@@ -108,6 +109,31 @@ let savedServers = []
 
 function serverIndex(savedServersElm, currentElm) {
   return Array.from(savedServersElm.children).indexOf(currentElm)
+}
+
+function buildTextInput(labelI18nKey, propertyName, savedServer, savedServersElm, serverElm) {
+  const label = document.createElement('label')
+  const labelText = document.createElement('span')
+  labelText.setAttribute(I18N_KEY_ATTR, labelI18nKey)
+  labelText.classList.add('i18n')
+  label.append(labelText)
+
+  loadI18n(currentLanguage, label)
+
+  const input = document.createElement('input')
+  input.type = 'text'
+  input.value = savedServer[propertyName] || ''
+  label.append(input)
+
+  input.addEventListener('input', debounce(
+    async (event) => {
+      savedServers[serverIndex(savedServersElm, serverElm)][propertyName] = event.target.value
+      await saveServerList()
+    },
+    500
+  ))
+
+  return label
 }
 
 function buildSavedServerElement(savedServersElm, savedServer, isEditing) {
@@ -127,7 +153,6 @@ function buildSavedServerElement(savedServersElm, savedServer, isEditing) {
   nickname.value = savedServer.nickname
   nickname.addEventListener('input', debounce(
     async (event) => {
-      console.log(event.target.value)
       savedServers[serverIndex(savedServersElm, serverElm)].nickname = event.target.value
       await saveServerList()
     },
@@ -140,12 +165,33 @@ function buildSavedServerElement(savedServersElm, savedServer, isEditing) {
 
   const editButton = document.createElement('button')
   editButton.classList.add('i18n')
-  editButton.setAttribute('data-i18n-key', 'saved-servers-edit')
+  editButton.setAttribute(I18N_KEY_ATTR, 'saved-servers-edit')
   buttonContainer.append(editButton)
 
   // Edit container
   const editContainer = document.createElement('div')
   editContainer.classList.add('edit-container')
+
+  const endpointContainer = document.createElement('div')
+  endpointContainer.append(
+    buildTextInput(
+      'saved-servers-udp-endpoint-label',
+      'udp-endpoint',
+      savedServer,
+      savedServersElm,
+      serverElm
+    )
+  )
+  endpointContainer.append(
+    buildTextInput(
+      'saved-servers-http-endpoint-label',
+      'http-endpoint',
+      savedServer,
+      savedServersElm,
+      serverElm
+    )
+  )
+  editContainer.append(endpointContainer)
 
   const toggleEdit = () => {
     editButton.classList.toggle('edit-button-open')
@@ -158,7 +204,6 @@ function buildSavedServerElement(savedServersElm, savedServer, isEditing) {
     toggleEdit()
   }
   serverElm.append(editContainer)
-  editContainer.textContent = "TEST"
 
   editButton.addEventListener('click', (_) => toggleEdit())
 

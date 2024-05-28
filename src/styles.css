@@ -151,18 +151,25 @@ p {
   box-shadow: var(--holo-glow-shadow);
 }
 
-.saved-server-nickname-container {
+#saved-servers .saved-server-nickname-container {
   display: flex;
   flex-direction: row;
 }
 
-.saved-server-nickname {
+#saved-servers .saved-server-nickname {
   background-color: transparent;
   border: 1px solid transparent;
   color: unset;
   cursor: inherit;
   display: block;
   flex: 1 1;
+}
+
+input, #saved-servers .saved-server-nickname-edit {
+  background-color: var(--bg-color);
+  border: 1px solid var(--holo-bg-color);
+  color: white;
+  cursor: text;
   font-family: unset;
   font-size: unset;
   font-weight: unset;
@@ -170,23 +177,27 @@ p {
   padding: 5px;
 }
 
-.saved-server-nickname-edit {
-  background-color: var(--bg-color);
-  border: 1px solid var(--holo-bg-color);
-  color: white;
-  cursor: text;
-}
-
-.edit-container {
+#saved-servers .edit-container {
   display: none;
+  font-size: 0.8em;
+  margin-top: 10px;
 }
 
-.edit-container-open {
+#saved-servers .edit-container-open {
   display: block;
 }
 
-.edit-button-open {
-  background-color: var(--bg-highlight-color) !important;
+#saved-servers .edit-button-open {
+  background-color: var(--bg-highlight-color);
+}
+
+#saved-servers label {
+  cursor: inherit;
+  display: inline-block;
+}
+
+#saved-servers label > span {
+  margin-right: 10px;
 }
 
 .draggable-list > * {

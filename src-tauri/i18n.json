@@ -6,6 +6,8 @@
         "tab-name-settings": "Settings",
         "saved-servers-scam-warning": "<b>Never join a server that includes paid items.</b> It's a scam! Look for another server where you can earn everything for free.",
         "saved-servers-add-server-btn": "Add server",
-        "saved-servers-edit": "Edit"
+        "saved-servers-edit": "Edit",
+        "saved-servers-udp-endpoint-label": "UDP Endpoint",
+        "saved-servers-http-endpoint-label": "HTTP Endpoint"
     }
 }
