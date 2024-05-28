@@ -1,9 +1,9 @@
 const { invoke } = window.__TAURI__.tauri
 const { message } = window.__TAURI__.dialog
 const { BaseDirectory, createDir, readTextFile, writeTextFile } = window.__TAURI__.fs
-const { appDataDir } = window.__TAURI__.path
-import { LANGUAGES } from './i18n.js'
+const { appDataDir, resolveResource } = window.__TAURI__.path
 
+const LANGUAGES = {}
 let currentLanguage = 'en-US'
 
 function debounce(callback, wait) {
@@ -74,6 +74,10 @@ function initTabs() {
 }
 
 // Internationalization
+async function loadLanguageConfig(path) {
+  Object.assign(LANGUAGES, JSON.parse(await readTextFile(path)))
+}
+
 function getI18nValueForKey(langId, key) {
   if (!LANGUAGES[langId][key]) {
     throw new Error(`Unknown i18n key ${key} for language ${langId}`)
@@ -258,6 +262,7 @@ function initDraggableList(parentList, callback) {
 
 let x = 0
 async function main() {
+  await loadLanguageConfig(await resolveResource('i18n.json'))
   initTabs()
   initDraggableList(document.getElementById(SAVED_SERVERS_LIST_ID), reorderSavedServers)
   loadI18n(currentLanguage, document)
