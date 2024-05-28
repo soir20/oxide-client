@@ -305,7 +305,6 @@ function initDraggableList(parentList, callback) {
   }
 }
 
-let x = 0
 async function main() {
   await loadLanguageConfig(await resolveResource('i18n.json'))
   initTabs()
@@ -315,7 +314,7 @@ async function main() {
 
   document.getElementById('create-saved-server-btn').addEventListener('click', (e) => {
     e.preventDefault()
-    addSavedServer(`My Test Server${x++}`)
+    addSavedServer(getI18nValueForKey(currentLanguage, 'saved-servers-default-name'))
   })
 }
 
