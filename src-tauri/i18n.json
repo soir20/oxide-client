@@ -9,6 +9,6 @@
         "saved-servers-default-name": "My Saved Server",
         "saved-servers-edit": "Edit",
         "saved-servers-udp-endpoint-label": "UDP Endpoint",
-        "saved-servers-http-endpoint-label": "HTTP Endpoint"
+        "saved-servers-https-endpoint-label": "HTTPS Endpoint"
     }
 }

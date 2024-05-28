@@ -197,6 +197,7 @@ input, #saved-servers .saved-server-nickname-edit {
 }
 
 #saved-servers label > span {
+  font-weight: 600;
   margin-right: 10px;
 }
 

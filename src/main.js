@@ -184,8 +184,8 @@ function buildSavedServerElement(savedServersElm, savedServer, isEditing) {
   )
   endpointContainer.append(
     buildTextInput(
-      'saved-servers-http-endpoint-label',
-      'http-endpoint',
+      'saved-servers-https-endpoint-label',
+      'https-endpoint',
       savedServer,
       savedServersElm,
       serverElm
