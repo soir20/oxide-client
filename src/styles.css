@@ -184,7 +184,9 @@ input, #saved-servers .saved-server-nickname-edit {
 }
 
 #saved-servers .edit-container-open {
-  display: block;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 #saved-servers .edit-button-open {

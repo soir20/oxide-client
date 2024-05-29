@@ -3,6 +3,7 @@ const { message } = window.__TAURI__.dialog
 const { BaseDirectory, createDir, readTextFile, writeTextFile } = window.__TAURI__.fs
 const { appDataDir, resolveResource } = window.__TAURI__.path
 
+const I18N_CLASS_NAME = 'i18n'
 const I18N_KEY_ATTR = 'data-i18n-key'
 const LANGUAGES = {}
 let currentLanguage = 'en-US'
@@ -115,7 +116,7 @@ function buildTextInput(labelI18nKey, propertyName, savedServer, savedServersElm
   const label = document.createElement('label')
   const labelText = document.createElement('span')
   labelText.setAttribute(I18N_KEY_ATTR, labelI18nKey)
-  labelText.classList.add('i18n')
+  labelText.classList.add(I18N_CLASS_NAME)
   label.append(labelText)
 
   loadI18n(currentLanguage, label)
@@ -164,7 +165,7 @@ function buildSavedServerElement(savedServersElm, savedServer, isEditing) {
   nicknameContainer.append(buttonContainer)
 
   const editButton = document.createElement('button')
-  editButton.classList.add('i18n')
+  editButton.classList.add(I18N_CLASS_NAME)
   editButton.setAttribute(I18N_KEY_ATTR, 'saved-servers-edit')
   buttonContainer.append(editButton)
 
@@ -173,6 +174,8 @@ function buildSavedServerElement(savedServersElm, savedServer, isEditing) {
   editContainer.classList.add('edit-container')
 
   const endpointContainer = document.createElement('div')
+  editContainer.append(endpointContainer)
+
   endpointContainer.append(
     buildTextInput(
       'saved-servers-udp-endpoint-label',
@@ -191,7 +194,21 @@ function buildSavedServerElement(savedServersElm, savedServer, isEditing) {
       serverElm
     )
   )
-  editContainer.append(endpointContainer)
+
+  const editButtonContainer = document.createElement('div')
+  editContainer.append(editButtonContainer)
+
+  const removeButton = document.createElement('button')
+  removeButton.classList.add(I18N_CLASS_NAME)
+  removeButton.setAttribute(I18N_KEY_ATTR, 'saved-servers-remove')
+
+  removeButton.addEventListener('click', async (_) => {
+    savedServers.splice(serverIndex(savedServersElm, serverElm), 1)
+    serverElm.remove()
+    await saveServerList()
+  })
+
+  editButtonContainer.append(removeButton)
 
   const toggleEdit = () => {
     editButton.classList.toggle('edit-button-open')
