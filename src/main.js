@@ -202,12 +202,18 @@ function buildSavedServerElement(savedServersElm, savedServer, isEditing) {
   nicknameContainer.append(nickname)
 
   const buttonContainer = document.createElement('div')
+  buttonContainer.classList.add('saved-servers-main-button-container')
   nicknameContainer.append(buttonContainer)
 
   const editButton = document.createElement('button')
   editButton.classList.add(I18N_CLASS_NAME)
   editButton.setAttribute(I18N_KEY_ATTR, 'saved-servers-edit')
   buttonContainer.append(editButton)
+
+  const playButton = document.createElement('button')
+  playButton.classList.add(I18N_CLASS_NAME)
+  playButton.setAttribute(I18N_KEY_ATTR, 'saved-servers-play')
+  buttonContainer.append(playButton)
 
   // Edit container
   const editContainer = document.createElement('div')

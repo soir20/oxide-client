@@ -9,6 +9,7 @@
         "saved-servers-add-server-btn": "Add server",
         "saved-servers-default-name": "My Saved Server",
         "saved-servers-edit": "Edit",
+        "saved-servers-play": "Play",
         "saved-servers-remove": "Remove",
         "saved-servers-udp-endpoint-label": "UDP Endpoint",
         "saved-servers-https-endpoint-label": "HTTPS Endpoint"

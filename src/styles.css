@@ -201,6 +201,11 @@ input, #saved-servers .saved-server-nickname-edit {
   padding: 5px;
 }
 
+#saved-servers .saved-servers-main-button-container {
+  display: flex;
+  gap: 5px;
+}
+
 #saved-servers .edit-container {
   display: none;
   font-size: 0.8em;
