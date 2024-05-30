@@ -6,14 +6,13 @@ const { appDataDir, resolveResource } = window.__TAURI__.path
 const SAVED_SERVERS_LIST_ID = 'saved-servers'
 const SAVED_SERVERS_PATH = 'saved-servers.json'
 const USER_SETTINGS_PATH = 'settings.json'
-const SETTINGS = {}
+const settings = {}
 
 const I18N_CLASS_NAME = 'i18n'
 const I18N_KEY_ATTR = 'data-i18n-key'
 const I18N_GLOBAL_CONFIG_PATH = 'i18n.json'
 const LANGUAGES = {}
 const DEFAULT_LANGUAGE = 'en-US'
-let currentLanguage
 
 function debounce(callback, wait) {
   let timeoutId = null
@@ -25,7 +24,7 @@ function debounce(callback, wait) {
 
 async function loadSettings() {
   try {
-    Object.assign(SETTINGS, JSON.parse(await readTextFile(USER_SETTINGS_PATH, { dir: BaseDirectory.AppData })))
+    Object.assign(settings, JSON.parse(await readTextFile(USER_SETTINGS_PATH, { dir: BaseDirectory.AppData })))
   } catch (err) {
     console.error('Unable to read settings:', err)
   }
@@ -38,9 +37,9 @@ async function writeTextToAppData(fileName, text) {
   } catch (err) {
     console.error('Unable to write saved servers:', err)
     message(
-      `${getI18nValueForKey(currentLanguage, 'saved-servers-write-failed')}\n${err}`,
+      `${getI18nValueForKey(settings.language, 'saved-servers-write-failed')}\n${err}`,
       {
-        okLabel: getI18nValueForKey(currentLanguage, 'ok'),
+        okLabel: getI18nValueForKey(settings.language, 'ok'),
         type: 'error'
       }
     )
@@ -49,6 +48,10 @@ async function writeTextToAppData(fileName, text) {
 
 function prettyPrintJson(jsonObject) {
   return JSON.stringify(jsonObject, null, 2)
+}
+
+async function saveSettings() {
+  await writeTextToAppData(USER_SETTINGS_PATH, prettyPrintJson(settings))
 }
 
 // Tab functionality
@@ -96,8 +99,8 @@ async function loadLanguageConfig(path) {
 }
 
 async function initLanguageSelector(languageSelector) {
-  if (!(SETTINGS.language in LANGUAGES)) {
-    currentLanguage = DEFAULT_LANGUAGE
+  if (!(settings.language in LANGUAGES)) {
+    settings.language = DEFAULT_LANGUAGE
   }
 
   for (const [langId, langValues] of Object.entries(LANGUAGES)) {
@@ -105,16 +108,17 @@ async function initLanguageSelector(languageSelector) {
     option.textContent = langValues.name
     option.value = langId
 
-    if (langId === currentLanguage) {
+    if (langId === settings.language) {
       option.selected = true
     }
 
     languageSelector.append(option)
   }
 
-  languageSelector.addEventListener('change', (event) => {
-    currentLanguage = event.target.value
-    loadI18n(currentLanguage, document)
+  languageSelector.addEventListener('change', async (event) => {
+    settings.language = event.target.value
+    loadI18n(settings.language, document)
+    await saveSettings()
   })
 }
 
@@ -137,7 +141,7 @@ function loadI18n(langId, parent) {
       throw new Error(`Element ${elm.localName} (id: ${elm.id}) is missing i18n key`)
     }
 
-    elm.innerHTML = getI18nValueForKey(currentLanguage, key)
+    elm.innerHTML = getI18nValueForKey(settings.language, key)
   }
 }
 
@@ -155,7 +159,7 @@ function buildTextInput(labelI18nKey, propertyName, savedServer, savedServersElm
   labelText.classList.add(I18N_CLASS_NAME)
   label.append(labelText)
 
-  loadI18n(currentLanguage, label)
+  loadI18n(settings.language, label)
 
   const input = document.createElement('input')
   input.type = 'text'
@@ -260,7 +264,7 @@ function buildSavedServerElement(savedServersElm, savedServer, isEditing) {
 
   editButton.addEventListener('click', (_) => toggleEdit())
 
-  loadI18n(currentLanguage, serverElm)
+  loadI18n(settings.language, serverElm)
 
   return serverElm
 }
@@ -365,12 +369,12 @@ async function main() {
   await initLanguageSelector(document.getElementById('language-selector'))
   initTabs()
   initDraggableList(document.getElementById(SAVED_SERVERS_LIST_ID), reorderSavedServers)
-  loadI18n(currentLanguage, document)
+  loadI18n(settings.language, document)
   await loadSavedServers()
 
   document.getElementById('create-saved-server-btn').addEventListener('click', (e) => {
     e.preventDefault()
-    addSavedServer(getI18nValueForKey(currentLanguage, 'saved-servers-default-name'))
+    addSavedServer(getI18nValueForKey(settings.language, 'saved-servers-default-name'))
   })
 }
 
