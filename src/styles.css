@@ -41,6 +41,30 @@ p {
   width: 100%;
 }
 
+#language-selector {
+  background: var(--holo-bg-color-light);
+  border: 1px solid var(--holo-bg-color);
+  border-radius: 5px;
+  color: var(--holo-color);
+  cursor: pointer;
+  display: inline-block;
+  float: right;
+  font-weight: 600;
+  margin: 5px;
+  padding: 5px 10px;
+  position: absolute;
+  right: 0;
+  text-shadow: 0 0 5px var(--holo-color);
+  text-transform: uppercase;
+  top: 0;
+  transition: var(--default-transition);
+  width: fit-content;
+}
+
+#language-selector > option {
+  color: initial;
+}
+
 .navigation {
   align-content: flex-start;
   color: var(--holo-color);

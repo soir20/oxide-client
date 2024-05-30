@@ -3,10 +3,17 @@ const { message } = window.__TAURI__.dialog
 const { BaseDirectory, createDir, readTextFile, writeTextFile } = window.__TAURI__.fs
 const { appDataDir, resolveResource } = window.__TAURI__.path
 
+const SAVED_SERVERS_LIST_ID = 'saved-servers'
+const SAVED_SERVERS_PATH = 'saved-servers.json'
+const USER_SETTINGS_PATH = 'settings.json'
+const SETTINGS = {}
+
 const I18N_CLASS_NAME = 'i18n'
 const I18N_KEY_ATTR = 'data-i18n-key'
+const I18N_GLOBAL_CONFIG_PATH = 'i18n.json'
 const LANGUAGES = {}
-let currentLanguage = 'en-US'
+const DEFAULT_LANGUAGE = 'en-US'
+let currentLanguage
 
 function debounce(callback, wait) {
   let timeoutId = null
@@ -16,12 +23,20 @@ function debounce(callback, wait) {
   }
 }
 
+async function loadSettings() {
+  try {
+    Object.assign(SETTINGS, JSON.parse(await readTextFile(USER_SETTINGS_PATH, { dir: BaseDirectory.AppData })))
+  } catch (err) {
+    console.error('Unable to read settings:', err)
+  }
+}
+
 async function writeTextToAppData(fileName, text) {
   try {
     await createDir(await appDataDir(), {recursive: true})
     await writeTextFile(fileName, text, {dir: BaseDirectory.AppData})
   } catch (err) {
-    console.error('Unable to write saved servers', err)
+    console.error('Unable to write saved servers:', err)
     message(
       `${getI18nValueForKey(currentLanguage, 'saved-servers-write-failed')}\n${err}`,
       {
@@ -80,6 +95,29 @@ async function loadLanguageConfig(path) {
   Object.assign(LANGUAGES, JSON.parse(await readTextFile(path)))
 }
 
+async function initLanguageSelector(languageSelector) {
+  if (!(SETTINGS.language in LANGUAGES)) {
+    currentLanguage = DEFAULT_LANGUAGE
+  }
+
+  for (const [langId, langValues] of Object.entries(LANGUAGES)) {
+    const option = document.createElement('option')
+    option.textContent = langValues.name
+    option.value = langId
+
+    if (langId === currentLanguage) {
+      option.selected = true
+    }
+
+    languageSelector.append(option)
+  }
+
+  languageSelector.addEventListener('change', (event) => {
+    currentLanguage = event.target.value
+    loadI18n(currentLanguage, document)
+  })
+}
+
 function getI18nValueForKey(langId, key) {
   if (!LANGUAGES[langId][key]) {
     throw new Error(`Unknown i18n key ${key} for language ${langId}`)
@@ -104,8 +142,6 @@ function loadI18n(langId, parent) {
 }
 
 // Saved server read/write
-const SAVED_SERVERS_LIST_ID = 'saved-servers'
-const SAVED_SERVERS_FILE = 'saved-servers.json'
 let savedServers = []
 
 function serverIndex(savedServersElm, currentElm) {
@@ -231,9 +267,10 @@ function buildSavedServerElement(savedServersElm, savedServer, isEditing) {
 
 async function loadSavedServers() {
   try {
-    savedServers = JSON.parse(await readTextFile(SAVED_SERVERS_FILE, { dir: BaseDirectory.AppData }))
+    savedServers = JSON.parse(await readTextFile(SAVED_SERVERS_PATH, { dir: BaseDirectory.AppData }))
   } catch (err) {
-    console.error('Unable to read saved servers', err)
+    savedServers = []
+    console.error('Unable to read saved servers:', err)
   }
 
   const savedServersElm = document.getElementById(SAVED_SERVERS_LIST_ID)
@@ -243,7 +280,7 @@ async function loadSavedServers() {
 }
 
 async function saveServerList() {
-  await writeTextToAppData(SAVED_SERVERS_FILE, prettyPrintJson(savedServers))
+  await writeTextToAppData(SAVED_SERVERS_PATH, prettyPrintJson(savedServers))
 }
 
 async function addSavedServer(nickname) {
@@ -323,7 +360,9 @@ function initDraggableList(parentList, callback) {
 }
 
 async function main() {
-  await loadLanguageConfig(await resolveResource('i18n.json'))
+  await loadSettings()
+  await loadLanguageConfig(await resolveResource(I18N_GLOBAL_CONFIG_PATH))
+  await initLanguageSelector(document.getElementById('language-selector'))
   initTabs()
   initDraggableList(document.getElementById(SAVED_SERVERS_LIST_ID), reorderSavedServers)
   loadI18n(currentLanguage, document)
