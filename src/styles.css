@@ -61,6 +61,10 @@ p {
   width: fit-content;
 }
 
+#language-selector:hover {
+  background: var(--holo-bg);
+}
+
 #language-selector > option {
   color: initial;
 }
