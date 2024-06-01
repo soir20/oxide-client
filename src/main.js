@@ -4,7 +4,6 @@ const { BaseDirectory, createDir, readTextFile, writeTextFile } = window.__TAURI
 const { appDataDir, resolveResource } = window.__TAURI__.path
 
 const SAVED_SERVERS_LIST_ID = 'saved-servers'
-const SAVED_SERVERS_PATH = 'saved-servers.json'
 const USER_SETTINGS_PATH = 'settings.json'
 const settings = {}
 
@@ -146,13 +145,11 @@ function loadI18n(langId, parent) {
 }
 
 // Saved server read/write
-let savedServers = []
-
 function serverIndex(savedServersElm, currentElm) {
   return Array.from(savedServersElm.children).indexOf(currentElm)
 }
 
-function buildTextInput(labelI18nKey, propertyName, savedServer, savedServersElm, serverElm) {
+function buildTextInput(labelI18nKey, callback, initValue, savedServersElm, serverElm) {
   const label = document.createElement('label')
   const labelText = document.createElement('span')
   labelText.setAttribute(I18N_KEY_ATTR, labelI18nKey)
@@ -163,13 +160,12 @@ function buildTextInput(labelI18nKey, propertyName, savedServer, savedServersElm
 
   const input = document.createElement('input')
   input.type = 'text'
-  input.value = savedServer[propertyName] || ''
+  input.value = initValue
   label.append(input)
 
   input.addEventListener('input', debounce(
     async (event) => {
-      savedServers[serverIndex(savedServersElm, serverElm)][propertyName] = event.target.value
-      await saveServerList()
+      await callback(serverIndex(savedServersElm, serverElm), event.target.value)
     },
     500
   ))
@@ -194,8 +190,7 @@ function buildSavedServerElement(savedServersElm, savedServer, isEditing) {
   nickname.value = savedServer.nickname
   nickname.addEventListener('input', debounce(
     async (event) => {
-      savedServers[serverIndex(savedServersElm, serverElm)].nickname = event.target.value
-      await saveServerList()
+      await invoke('set_saved_server_nickname', { index: serverIndex(savedServersElm, serverElm), nickname: event.target.value })
     },
     500
   ))
@@ -225,8 +220,8 @@ function buildSavedServerElement(savedServersElm, savedServer, isEditing) {
   endpointContainer.append(
     buildTextInput(
       'saved-servers-udp-endpoint-label',
-      'udp-endpoint',
-      savedServer,
+      async (index, udpEndpoint) => await invoke('set_saved_server_udp_endpoint', { index, udpEndpoint }),
+      savedServer.udp_endpoint,
       savedServersElm,
       serverElm
     )
@@ -234,8 +229,8 @@ function buildSavedServerElement(savedServersElm, savedServer, isEditing) {
   endpointContainer.append(
     buildTextInput(
       'saved-servers-https-endpoint-label',
-      'https-endpoint',
-      savedServer,
+      async (index, httpsEndpoint) => await invoke('set_saved_server_https_endpoint', { index, httpsEndpoint }),
+      savedServer.https_endpoint,
       savedServersElm,
       serverElm
     )
@@ -249,9 +244,8 @@ function buildSavedServerElement(savedServersElm, savedServer, isEditing) {
   removeButton.setAttribute(I18N_KEY_ATTR, 'saved-servers-remove')
 
   removeButton.addEventListener('click', async (_) => {
-    savedServers.splice(serverIndex(savedServersElm, serverElm), 1)
+    await invoke('remove_saved_server', { index: serverIndex(savedServersElm, serverElm) })
     serverElm.remove()
-    await saveServerList()
   })
 
   editButtonContainer.append(removeButton)
@@ -276,37 +270,23 @@ function buildSavedServerElement(savedServersElm, savedServer, isEditing) {
 }
 
 async function loadSavedServers() {
-  try {
-    savedServers = JSON.parse(await readTextFile(SAVED_SERVERS_PATH, { dir: BaseDirectory.AppData }))
-  } catch (err) {
-    savedServers = []
-    console.error('Unable to read saved servers:', err)
-  }
-
+  let savedServers = await invoke('load_saved_servers')
   const savedServersElm = document.getElementById(SAVED_SERVERS_LIST_ID)
   for (const savedServer of savedServers) {
     savedServersElm.append(buildSavedServerElement(savedServersElm, savedServer, false))
   }
 }
 
-async function saveServerList() {
-  await writeTextToAppData(SAVED_SERVERS_PATH, prettyPrintJson(savedServers))
-}
-
 async function addSavedServer(nickname) {
-  const savedServer = { nickname }
-  savedServers.unshift(savedServer)
+  const savedServer = { nickname, udp_endpoint: '', https_endpoint: '' }
   const savedServersElm = document.getElementById(SAVED_SERVERS_LIST_ID)
-  savedServersElm.prepend(buildSavedServerElement(savedServersElm, savedServer, true))
 
-  await saveServerList()
+  await invoke('add_saved_server', { savedServer })
+  savedServersElm.prepend(buildSavedServerElement(savedServersElm, savedServer, true))
 }
 
-async function reorderSavedServers(previousIndex, newIndex) {
-  let server = savedServers[previousIndex]
-  savedServers.splice(previousIndex, 1)
-  savedServers.splice(newIndex, 0, server)
-  await saveServerList()
+async function reorderSavedServers(oldIndex, newIndex) {
+  await invoke('reorder_saved_servers', { oldIndex, newIndex })
 }
 
 function initDraggableList(parentList, callback) {
