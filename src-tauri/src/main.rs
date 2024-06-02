@@ -1,9 +1,10 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 use std::fs::{create_dir_all, read, write};
 use std::path::{Path, PathBuf};
+use std::string::ToString;
 use std::sync::Mutex;
 use serde::{Deserialize, Serialize};
 use tauri::{Manager, State};
@@ -11,11 +12,13 @@ use tauri::{Manager, State};
 const SAVED_SERVERS_PATH: &str = "saved-servers.json";
 const USER_SETTINGS_PATH: &str = "settings.json";
 const I18N_GLOBAL_CONFIG_PATH: &str = "i18n.json";
-const DEFAULT_LANGUAGE: &str = "en-US";
+const DEFAULT_LANGUAGE_ID: &str = "en-US";
+const LANGUAGE_NAME_KEY: &str = "name";
 
 struct GlobalState {
     saved_servers_path: PathBuf,
     saved_servers: Mutex<VecDeque<SavedServer>>,
+    languages: HashMap<String, Language>,
     settings: Mutex<Settings>
 }
 
@@ -26,15 +29,28 @@ struct SavedServer {
     https_endpoint: String
 }
 
+#[derive(Deserialize, Serialize)]
 struct Settings {
     language: String
 }
 
-#[tauri::command]
-fn load_saved_servers(state: State<GlobalState>) -> VecDeque<SavedServer> {
-    let saved_servers = state.inner().saved_servers.lock()
-        .expect("Unable to lock saved servers");
-    (*saved_servers).clone()
+type Language = HashMap<String, String>;
+
+fn language<'a>(languages: &'a HashMap<String, Language>, language_id: &String) -> &'a Language {
+    languages.get(language_id)
+        .or(languages.get(DEFAULT_LANGUAGE_ID))
+        .expect("Missing default language")
+}
+
+fn i18n_value_for_language_id_and_key(languages: &HashMap<String, Language>, language_id: &String, key: &String) -> String {
+   i18n_value_for_language_and_key(language(languages, language_id), language_id, key)
+}
+
+fn i18n_value_for_language_and_key(language: &Language, language_id: &String, key: &String) -> String {
+    (
+        *language.get(key)
+            .expect(&format!("Requested unknown key {key} for language {language_id}"))
+    ).clone()
 }
 
 fn write_json_to_app_data<T: Serialize>(value: &T, path: &Path) -> Result<(), String> {
@@ -51,6 +67,42 @@ fn write_json_to_app_data<T: Serialize>(value: &T, path: &Path) -> Result<(), St
 
 fn save_server_list(saved_servers: &VecDeque<SavedServer>, path: &Path) -> Result<(), String> {
     write_json_to_app_data(saved_servers, path)
+}
+
+#[tauri::command]
+fn current_language_id(state: State<GlobalState>) -> String {
+    state.settings.lock().expect("Unable to lock settings")
+        .language
+        .clone()
+}
+
+#[tauri::command]
+fn all_language_ids_names(state: State<GlobalState>) -> Vec<(String, String)> {
+    state.languages.iter().map(|(language_id, language)|
+        (
+            (*language_id).clone(),
+            i18n_value_for_language_and_key(language, language_id, &LANGUAGE_NAME_KEY.to_string())
+        )
+    ).collect()
+}
+
+#[tauri::command]
+fn set_language(new_language_id: String, state: State<GlobalState>) {
+    state.settings.lock().expect("Unable to lock settings").language = new_language_id;
+}
+
+#[tauri::command]
+fn i18n_value_for_key(key: String, state: State<GlobalState>) -> String {
+    let language_id = &state.settings.lock().expect("Unable to lock settings")
+        .language;
+    i18n_value_for_language_id_and_key(&state.languages, language_id, &key)
+}
+
+#[tauri::command]
+fn load_saved_servers(state: State<GlobalState>) -> VecDeque<SavedServer> {
+    let saved_servers = state.inner().saved_servers.lock()
+        .expect("Unable to lock saved servers");
+    (*saved_servers).clone()
 }
 
 #[tauri::command]
@@ -106,7 +158,8 @@ fn reorder_saved_servers(old_index: usize, new_index: usize, state: State<Global
 fn main() {
     tauri::Builder::default()
         .setup(|app| {
-            let app_data_dir = app.path_resolver().app_data_dir().expect("Unable to resolve app data directory");
+            let app_data_dir = app.path_resolver().app_data_dir()
+                .expect("Unable to resolve app data directory");
 
             let saved_servers_path = app_data_dir.join(SAVED_SERVERS_PATH);
             let saved_servers: VecDeque<SavedServer> = match read(&saved_servers_path) {
@@ -117,17 +170,37 @@ fn main() {
                 }
             };
 
+            let settings_path = app_data_dir.join(USER_SETTINGS_PATH);
+            let settings: Settings = match read(&settings_path) {
+                Ok(bytes) => serde_json::from_slice(&bytes).expect("Bad saved servers config file"),
+                Err(err) => {
+                    println!("Unable to read settings file: {}", err);
+                    Settings {
+                        language: DEFAULT_LANGUAGE_ID.to_string()
+                    }
+                }
+            };
+
+            let languages_path = app.path_resolver().resolve_resource(I18N_GLOBAL_CONFIG_PATH)
+                .expect("Unable to resolve languages file");
+            let languages: HashMap<String, Language> = serde_json::from_slice(
+                &read(&languages_path).expect("Missing languages file")
+            ).expect("Bad languages file");
+
             app.manage(GlobalState {
                 saved_servers_path,
                 saved_servers: Mutex::new(saved_servers),
-                settings: Mutex::new(Settings {
-                    language: DEFAULT_LANGUAGE.to_string()
-                }),
+                languages,
+                settings: Mutex::new(settings),
             });
 
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            current_language_id,
+            all_language_ids_names,
+            set_language,
+            i18n_value_for_key,
             load_saved_servers,
             set_saved_server_nickname,
             set_saved_server_udp_endpoint,

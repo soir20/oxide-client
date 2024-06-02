@@ -1,17 +1,11 @@
 const { invoke } = window.__TAURI__.tauri
 const { message } = window.__TAURI__.dialog
-const { BaseDirectory, createDir, readTextFile, writeTextFile } = window.__TAURI__.fs
-const { appDataDir, resolveResource } = window.__TAURI__.path
 
 const SAVED_SERVERS_LIST_ID = 'saved-servers'
-const USER_SETTINGS_PATH = 'settings.json'
-const settings = {}
-
+const SAVED_SERVER_WRITE_FAILED_I18N_KEY = 'saved-servers-write-failed'
+const SETTINGS_WRITE_FAILED_I18N_KEY = 'settings-write-failed'
 const I18N_CLASS_NAME = 'i18n'
 const I18N_KEY_ATTR = 'data-i18n-key'
-const I18N_GLOBAL_CONFIG_PATH = 'i18n.json'
-const LANGUAGES = {}
-const DEFAULT_LANGUAGE = 'en-US'
 
 function debounce(callback, wait) {
   let timeoutId = null
@@ -21,36 +15,19 @@ function debounce(callback, wait) {
   }
 }
 
-async function loadSettings() {
+async function try_or_show_err_dialog(promise, i18n_key) {
   try {
-    Object.assign(settings, JSON.parse(await readTextFile(USER_SETTINGS_PATH, { dir: BaseDirectory.AppData })))
-  } catch (err) {
-    console.error('Unable to read settings:', err)
-  }
-}
-
-async function writeTextToAppData(fileName, text) {
-  try {
-    await createDir(await appDataDir(), {recursive: true})
-    await writeTextFile(fileName, text, {dir: BaseDirectory.AppData})
+    return await promise
   } catch (err) {
     console.error('Unable to write saved servers:', err)
     message(
-      `${getI18nValueForKey(settings.language, 'saved-servers-write-failed')}\n${err}`,
+      `${await getI18nValueForKey(i18n_key)}\n${err}`,
       {
-        okLabel: getI18nValueForKey(settings.language, 'ok'),
+        okLabel: await getI18nValueForKey('ok'),
         type: 'error'
       }
     )
   }
-}
-
-function prettyPrintJson(jsonObject) {
-  return JSON.stringify(jsonObject, null, 2)
-}
-
-async function saveSettings() {
-  await writeTextToAppData(USER_SETTINGS_PATH, prettyPrintJson(settings))
 }
 
 // Tab functionality
@@ -93,21 +70,14 @@ function initTabs() {
 }
 
 // Internationalization
-async function loadLanguageConfig(path) {
-  Object.assign(LANGUAGES, JSON.parse(await readTextFile(path)))
-}
-
 async function initLanguageSelector(languageSelector) {
-  if (!(settings.language in LANGUAGES)) {
-    settings.language = DEFAULT_LANGUAGE
-  }
-
-  for (const [langId, langValues] of Object.entries(LANGUAGES)) {
+  const currentLangId = await invoke('current_language_id')
+  for (const [langId, langName] of await invoke('all_language_ids_names')) {
     const option = document.createElement('option')
-    option.textContent = langValues.name
+    option.textContent = langName
     option.value = langId
 
-    if (langId === settings.language) {
+    if (langId === currentLangId) {
       option.selected = true
     }
 
@@ -115,32 +85,23 @@ async function initLanguageSelector(languageSelector) {
   }
 
   languageSelector.addEventListener('change', async (event) => {
-    settings.language = event.target.value
-    loadI18n(settings.language, document)
-    await saveSettings()
+    await try_or_show_err_dialog(invoke('set_language', event.target.value), SETTINGS_WRITE_FAILED_I18N_KEY)
+    await loadI18n(document)
   })
 }
 
-function getI18nValueForKey(langId, key) {
-  if (!LANGUAGES[langId][key]) {
-    throw new Error(`Unknown i18n key ${key} for language ${langId}`)
-  }
-
-  return LANGUAGES[langId][key]
+async function getI18nValueForKey(key) {
+  return await invoke('i18n_value_for_key', { key })
 }
 
-function loadI18n(langId, parent) {
-  if (!(langId in LANGUAGES)) {
-    throw new Error(`Unknown language ${langId}`)
-  }
-
+async function loadI18n(parent) {
   for (const elm of parent.querySelectorAll('.i18n')) {
     const key = elm.getAttribute(I18N_KEY_ATTR)
     if (!key) {
       throw new Error(`Element ${elm.localName} (id: ${elm.id}) is missing i18n key`)
     }
 
-    elm.innerHTML = getI18nValueForKey(settings.language, key)
+    elm.innerHTML = await getI18nValueForKey(key)
   }
 }
 
@@ -149,14 +110,14 @@ function serverIndex(savedServersElm, currentElm) {
   return Array.from(savedServersElm.children).indexOf(currentElm)
 }
 
-function buildTextInput(labelI18nKey, callback, initValue, savedServersElm, serverElm) {
+async function buildTextInput(labelI18nKey, callback, initValue, savedServersElm, serverElm) {
   const label = document.createElement('label')
   const labelText = document.createElement('span')
   labelText.setAttribute(I18N_KEY_ATTR, labelI18nKey)
   labelText.classList.add(I18N_CLASS_NAME)
   label.append(labelText)
 
-  loadI18n(settings.language, label)
+  await loadI18n(label)
 
   const input = document.createElement('input')
   input.type = 'text'
@@ -173,7 +134,7 @@ function buildTextInput(labelI18nKey, callback, initValue, savedServersElm, serv
   return label
 }
 
-function buildSavedServerElement(savedServersElm, savedServer, isEditing) {
+async function buildSavedServerElement(savedServersElm, savedServer, isEditing) {
   const serverElm = document.createElement('li')
   serverElm.draggable = true
 
@@ -190,7 +151,7 @@ function buildSavedServerElement(savedServersElm, savedServer, isEditing) {
   nickname.value = savedServer.nickname
   nickname.addEventListener('input', debounce(
     async (event) => {
-      await invoke('set_saved_server_nickname', { index: serverIndex(savedServersElm, serverElm), nickname: event.target.value })
+      await try_or_show_err_dialog(invoke('set_saved_server_nickname', { index: serverIndex(savedServersElm, serverElm), nickname: event.target.value }), SAVED_SERVER_WRITE_FAILED_I18N_KEY)
     },
     500
   ))
@@ -218,18 +179,18 @@ function buildSavedServerElement(savedServersElm, savedServer, isEditing) {
   editContainer.append(endpointContainer)
 
   endpointContainer.append(
-    buildTextInput(
+    await buildTextInput(
       'saved-servers-udp-endpoint-label',
-      async (index, udpEndpoint) => await invoke('set_saved_server_udp_endpoint', { index, udpEndpoint }),
+      async (index, udpEndpoint) => await try_or_show_err_dialog(invoke('set_saved_server_udp_endpoint', { index, udpEndpoint }), SAVED_SERVER_WRITE_FAILED_I18N_KEY),
       savedServer.udp_endpoint,
       savedServersElm,
       serverElm
     )
   )
   endpointContainer.append(
-    buildTextInput(
+    await buildTextInput(
       'saved-servers-https-endpoint-label',
-      async (index, httpsEndpoint) => await invoke('set_saved_server_https_endpoint', { index, httpsEndpoint }),
+      async (index, httpsEndpoint) => await try_or_show_err_dialog(invoke('set_saved_server_https_endpoint', { index, httpsEndpoint }), SAVED_SERVER_WRITE_FAILED_I18N_KEY),
       savedServer.https_endpoint,
       savedServersElm,
       serverElm
@@ -244,7 +205,7 @@ function buildSavedServerElement(savedServersElm, savedServer, isEditing) {
   removeButton.setAttribute(I18N_KEY_ATTR, 'saved-servers-remove')
 
   removeButton.addEventListener('click', async (_) => {
-    await invoke('remove_saved_server', { index: serverIndex(savedServersElm, serverElm) })
+    await try_or_show_err_dialog(invoke('remove_saved_server', { index: serverIndex(savedServersElm, serverElm) }), SAVED_SERVER_WRITE_FAILED_I18N_KEY)
     serverElm.remove()
   })
 
@@ -264,16 +225,16 @@ function buildSavedServerElement(savedServersElm, savedServer, isEditing) {
 
   editButton.addEventListener('click', (_) => toggleEdit())
 
-  loadI18n(settings.language, serverElm)
+  await loadI18n(serverElm)
 
   return serverElm
 }
 
 async function loadSavedServers() {
-  let savedServers = await invoke('load_saved_servers')
+  let savedServers = await try_or_show_err_dialog(invoke('load_saved_servers'), SAVED_SERVER_WRITE_FAILED_I18N_KEY)
   const savedServersElm = document.getElementById(SAVED_SERVERS_LIST_ID)
   for (const savedServer of savedServers) {
-    savedServersElm.append(buildSavedServerElement(savedServersElm, savedServer, false))
+    savedServersElm.append(await buildSavedServerElement(savedServersElm, savedServer, false))
   }
 }
 
@@ -281,12 +242,12 @@ async function addSavedServer(nickname) {
   const savedServer = { nickname, udp_endpoint: '', https_endpoint: '' }
   const savedServersElm = document.getElementById(SAVED_SERVERS_LIST_ID)
 
-  await invoke('add_saved_server', { savedServer })
-  savedServersElm.prepend(buildSavedServerElement(savedServersElm, savedServer, true))
+  await try_or_show_err_dialog(invoke('add_saved_server', { savedServer }), SAVED_SERVER_WRITE_FAILED_I18N_KEY)
+  savedServersElm.prepend(await buildSavedServerElement(savedServersElm, savedServer, true))
 }
 
 async function reorderSavedServers(oldIndex, newIndex) {
-  await invoke('reorder_saved_servers', { oldIndex, newIndex })
+  await try_or_show_err_dialog(invoke('reorder_saved_servers', { oldIndex, newIndex }), SAVED_SERVER_WRITE_FAILED_I18N_KEY)
 }
 
 function initDraggableList(parentList, callback) {
@@ -350,17 +311,15 @@ function initDraggableList(parentList, callback) {
 }
 
 async function main() {
-  await loadSettings()
-  await loadLanguageConfig(await resolveResource(I18N_GLOBAL_CONFIG_PATH))
   await initLanguageSelector(document.getElementById('language-selector'))
   initTabs()
   initDraggableList(document.getElementById(SAVED_SERVERS_LIST_ID), reorderSavedServers)
-  loadI18n(settings.language, document)
+  await loadI18n(document)
   await loadSavedServers()
 
-  document.getElementById('create-saved-server-btn').addEventListener('click', (e) => {
+  document.getElementById('create-saved-server-btn').addEventListener('click', async (e) => {
     e.preventDefault()
-    addSavedServer(getI18nValueForKey(settings.language, 'saved-servers-default-name'))
+    await addSavedServer(await getI18nValueForKey('saved-servers-default-name'))
   })
 }
 
