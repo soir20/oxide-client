@@ -16,6 +16,7 @@ const DEFAULT_LANGUAGE_ID: &str = "en-US";
 const LANGUAGE_NAME_KEY: &str = "name";
 
 struct GlobalState {
+    settings_path: PathBuf,
     saved_servers_path: PathBuf,
     saved_servers: Mutex<VecDeque<SavedServer>>,
     languages: HashMap<String, Language>,
@@ -87,8 +88,10 @@ fn all_language_ids_names(state: State<GlobalState>) -> Vec<(String, String)> {
 }
 
 #[tauri::command]
-fn set_language(new_language_id: String, state: State<GlobalState>) {
-    state.settings.lock().expect("Unable to lock settings").language = new_language_id;
+fn set_language(new_language_id: String, state: State<GlobalState>) -> Result<(), String> {
+    let mut settings = state.settings.lock().expect("Unable to lock settings");
+    settings.language = new_language_id;
+    write_json_to_app_data(&(*settings), &state.settings_path)
 }
 
 #[tauri::command]
@@ -188,6 +191,7 @@ fn main() {
             ).expect("Bad languages file");
 
             app.manage(GlobalState {
+                settings_path,
                 saved_servers_path,
                 saved_servers: Mutex::new(saved_servers),
                 languages,

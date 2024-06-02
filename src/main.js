@@ -85,7 +85,7 @@ async function initLanguageSelector(languageSelector) {
   }
 
   languageSelector.addEventListener('change', async (event) => {
-    await try_or_show_err_dialog(invoke('set_language', event.target.value), SETTINGS_WRITE_FAILED_I18N_KEY)
+    await try_or_show_err_dialog(invoke('set_language', { newLanguageId: event.target.value }), SETTINGS_WRITE_FAILED_I18N_KEY)
     await loadI18n(document)
   })
 }
@@ -231,7 +231,7 @@ async function buildSavedServerElement(savedServersElm, savedServer, isEditing) 
 }
 
 async function loadSavedServers() {
-  let savedServers = await try_or_show_err_dialog(invoke('load_saved_servers'), SAVED_SERVER_WRITE_FAILED_I18N_KEY)
+  let savedServers = await invoke('load_saved_servers')
   const savedServersElm = document.getElementById(SAVED_SERVERS_LIST_ID)
   for (const savedServer of savedServers) {
     savedServersElm.append(await buildSavedServerElement(savedServersElm, savedServer, false))
