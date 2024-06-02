@@ -72,7 +72,10 @@ function initTabs() {
 // Internationalization
 async function initLanguageSelector(languageSelector) {
   const currentLangId = await invoke('current_language_id')
-  for (const [langId, langName] of await invoke('all_language_ids_names')) {
+  const languages = await invoke('all_language_ids_names')
+  languages.sort(([, name1], [, name2]) => name1.localeCompare(name2))
+
+  for (const [langId, langName] of languages) {
     const option = document.createElement('option')
     option.textContent = langName
     option.value = langId
