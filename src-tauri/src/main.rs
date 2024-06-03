@@ -6,6 +6,8 @@ use std::fs::{create_dir_all, read, write};
 use std::path::{Path, PathBuf};
 use std::string::ToString;
 use std::sync::Mutex;
+
+use regex::bytes::Regex;
 use serde::{Deserialize, Serialize};
 use tauri::{Manager, State};
 
@@ -68,6 +70,14 @@ fn write_json_to_app_data<T: Serialize>(value: &T, path: &Path) -> Result<(), St
 
 fn save_server_list(saved_servers: &VecDeque<SavedServer>, path: &Path) -> Result<(), String> {
     write_json_to_app_data(saved_servers, path)
+}
+
+fn detect_client_version(client_bytes: &[u8]) -> Option<String> {
+    let version_regex = Regex::new(r"(?-u)\d\.\d{3}\.\d\.\d{6}").expect("Unable to compile regex");
+    version_regex.find(&client_bytes).map_or(
+        None,
+        |mat| String::from_utf8(Vec::from(mat.as_bytes())).ok()
+    )
 }
 
 #[tauri::command]
