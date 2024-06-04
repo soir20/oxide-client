@@ -13,6 +13,14 @@
         "saved-servers-play": "Play",
         "saved-servers-remove": "Remove",
         "saved-servers-udp-endpoint-label": "UDP Endpoint",
-        "saved-servers-https-endpoint-label": "HTTPS Endpoint"
+        "saved-servers-https-endpoint-label": "HTTPS Endpoint",
+        "settings-add-client-prompt": "<b>Before you play, add a 2014 Clone Wars Adventures client.</b> Because the client is the property of Daybreak Game Company, we can't distribute it, so you'll need to supply one. Please select <b>CloneWars.exe</b> from your filesystem using the file picker below.",
+        "settings-add-client-btn": "Add CloneWars.exe",
+        "settings-add-client-title": "Please select CloneWars.exe.",
+        "settings-add-client-executable-file-type-name": "Executable",
+        "settings-add-client-all-file-type-name": "All",
+        "settings-known-clients": "Clients you've added:",
+        "settings-add-client-error": "We couldn't add the client you selected for the following reason:",
+        "settings-added-client": "Successfully added the client with the following auto-detected version:"
     }
 }

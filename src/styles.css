@@ -115,7 +115,7 @@ p {
   margin-top: -1px;
 }
 
-#create-saved-server-btn {
+#create-saved-server-btn, #add-client-btn {
   background: var(--holo-bg-color-light);
   border: 1px solid var(--holo-bg-color);
   border-radius: 5px;
@@ -131,7 +131,7 @@ p {
   width: fit-content;
 }
 
-#create-saved-server-btn:hover {
+#create-saved-server-btn:hover, #add-client-btn:hover {
   background: var(--holo-bg);
 }
 
@@ -243,6 +243,15 @@ input, #saved-servers .saved-server-nickname-edit {
 
 .dragged {
   opacity: 50%;
+}
+
+#known-clients-label {
+  font-weight: 600;
+  margin-top: 15px;
+}
+
+#client-list {
+  list-style: square;
 }
 
 @font-face {

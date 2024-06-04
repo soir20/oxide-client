@@ -1,5 +1,5 @@
 const { invoke } = window.__TAURI__.tauri
-const { message } = window.__TAURI__.dialog
+const { message, open } = window.__TAURI__.dialog
 
 const SAVED_SERVERS_LIST_ID = 'saved-servers'
 const SAVED_SERVER_WRITE_FAILED_I18N_KEY = 'saved-servers-write-failed'
@@ -313,6 +313,55 @@ function initDraggableList(parentList, callback) {
   }
 }
 
+// Client management
+async function initAddClientButton(buttonElement, listElement) {
+  buttonElement.addEventListener('click', async () => {
+    const clientPath = await open({
+      directory: false,
+      filters: [
+        { name: await getI18nValueForKey('settings-add-client-executable-file-type-name'), extensions: ["exe"]},
+        { name: await getI18nValueForKey('settings-add-client-all-file-type-name'), extensions: [""]}
+      ],
+      multiple: false,
+      title: await getI18nValueForKey('settings-add-client-title')
+    })
+
+    const addClient = async () => {
+      const clientVersion = await invoke('add_client', {path: clientPath})
+      await refreshClientList(listElement)
+      message(
+        `${await getI18nValueForKey('settings-added-client')}\n${clientVersion}`,
+        {
+          okLabel: await getI18nValueForKey('ok'),
+          type: 'info'
+        }
+      )
+    }
+
+    await try_or_show_err_dialog(
+      addClient(),
+      'settings-add-client-error'
+    )
+  })
+}
+
+async function refreshClientList(element) {
+  while (element.lastElementChild) {
+    element.removeChild(element.lastElementChild)
+  }
+
+  const clientList = await invoke('list_clients')
+  clientList.sort(([version1, ], [version2, ]) => {
+    version1.localeCompare(version2)
+  })
+
+  for (const [clientVersion, clientPath] of clientList) {
+    const listItem = document.createElement('li')
+    listItem.textContent = `${clientVersion} (${clientPath})`
+    element.append(listItem)
+  }
+}
+
 async function main() {
   await initLanguageSelector(document.getElementById('language-selector'))
   initTabs()
@@ -324,6 +373,10 @@ async function main() {
     e.preventDefault()
     await addSavedServer(await getI18nValueForKey('saved-servers-default-name'))
   })
+
+  const clientList = document.getElementById('client-list')
+  await initAddClientButton(document.getElementById('add-client-btn'), clientList)
+  await refreshClientList(clientList)
 }
 
 await main()
