@@ -353,9 +353,7 @@ async function refreshClientList(element) {
   }
 
   const clientList = await invoke('list_clients')
-  clientList.sort(([version1, ], [version2, ]) => {
-    version1.localeCompare(version2)
-  })
+  clientList.sort(([version1, ], [version2, ]) => version1.localeCompare(version2))
 
   for (const [clientVersion, clientPath] of clientList) {
     const listItem = document.createElement('li')
