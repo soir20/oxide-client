@@ -12,18 +12,25 @@
     <div class="container">
       <select id="language-selector" name="language-selector"></select>
       <div class="navigation">
-        <a class="tab tab-active i18n" id="tab-servers" data-i18n-key="tab-name-saved-servers"></a>
+        <a class="tab i18n" id="tab-servers" data-i18n-key="tab-name-saved-servers"></a>
         <a class="tab i18n" id="tab-settings" data-i18n-key="tab-name-settings"></a>
       </div>
 
       <div class="horizontal-divider"></div>
 
-      <div class="tab-content tab-content-active" id="tab-content-servers">
+      <div class="tab-content" id="tab-content-servers">
         <p class="i18n" data-i18n-key="saved-servers-scam-warning"></p>
         <button id="create-saved-server-btn" class="i18n" data-i18n-key="saved-servers-add-server-btn"></button>
         <ol id="saved-servers"></ol>
       </div>
-      <div class="tab-content" id="tab-content-settings">Settings</div>
+      <div class="tab-content" id="tab-content-settings">
+        <div class="i18n" data-i18n-key="settings-add-client-prompt"></div>
+        <button id="add-client-btn" class="i18n" data-i18n-key="settings-add-client-btn"></button>
+        <div id="known-clients-container">
+          <div id="known-clients-label" class="i18n" data-i18n-key="settings-known-clients"></div>
+          <ol id="client-list"></ol>
+        </div>
+      </div>
 
     </div>
   </body>

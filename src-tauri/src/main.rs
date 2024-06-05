@@ -34,6 +34,7 @@ struct SavedServer {
 
 #[derive(Deserialize, Serialize)]
 struct Settings {
+    clients: HashMap<String, PathBuf>,
     language: String
 }
 
@@ -73,11 +74,16 @@ fn save_server_list(saved_servers: &VecDeque<SavedServer>, path: &Path) -> Resul
 }
 
 fn detect_client_version(client_bytes: &[u8]) -> Option<String> {
-    let version_regex = Regex::new(r"(?-u)\d\.\d{3}\.\d\.\d{6}").expect("Unable to compile regex");
+    let version_regex = Regex::new(r"\d\.\d{3}\.\d\.\d{6}").expect("Unable to compile regex");
     version_regex.find(&client_bytes).map_or(
         None,
         |mat| String::from_utf8(Vec::from(mat.as_bytes())).ok()
     )
+}
+
+fn remove_missing_clients(settings: &mut Settings, settings_path: &PathBuf) -> Result<(), String> {
+    settings.clients.retain(|_, path| path.try_exists().unwrap_or_else(|_| true));
+    write_json_to_app_data(&(*settings), settings_path)
 }
 
 #[tauri::command]
@@ -168,6 +174,26 @@ fn reorder_saved_servers(old_index: usize, new_index: usize, state: State<Global
     save_server_list(&saved_servers, &state.saved_servers_path)
 }
 
+#[tauri::command]
+fn add_client(path: PathBuf, state: State<GlobalState>) -> Result<String, String> {
+    let client_bytes = read(path.clone()).map_err(|err| err.to_string())?;
+    detect_client_version(&client_bytes).map_or(
+        Err("The selected file is not an original Clone Wars Adventures client from 2014 or earlier.".to_string()),
+        |client_version| {
+            let mut settings = state.settings.lock().expect("Unable to lock settings");
+            settings.clients.insert(client_version.clone(), path);
+            write_json_to_app_data(&(*settings), &state.settings_path)?;
+            Ok(client_version)
+        }
+    )
+}
+
+#[tauri::command]
+fn list_clients(state: State<GlobalState>) -> Vec<(String, PathBuf)> {
+    let settings = state.inner().settings.lock().expect("Unable to lock settings");
+    settings.clients.clone().into_iter().collect()
+}
+
 fn main() {
     tauri::Builder::default()
         .setup(|app| {
@@ -184,15 +210,19 @@ fn main() {
             };
 
             let settings_path = app_data_dir.join(USER_SETTINGS_PATH);
-            let settings: Settings = match read(&settings_path) {
+            let mut settings: Settings = match read(&settings_path) {
                 Ok(bytes) => serde_json::from_slice(&bytes).expect("Bad saved servers config file"),
                 Err(err) => {
                     println!("Unable to read settings file: {}", err);
                     Settings {
+                        clients: HashMap::new(),
                         language: DEFAULT_LANGUAGE_ID.to_string()
                     }
                 }
             };
+            if let Err(err) = remove_missing_clients(&mut settings, &settings_path) {
+                println!("Unable to save settings file after removing missing clients: {}", err);
+            }
 
             let languages_path = app.path_resolver().resolve_resource(I18N_GLOBAL_CONFIG_PATH)
                 .expect("Unable to resolve languages file");
@@ -221,7 +251,9 @@ fn main() {
             set_saved_server_https_endpoint,
             add_saved_server,
             remove_saved_server,
-            reorder_saved_servers
+            reorder_saved_servers,
+            add_client,
+            list_clients
         ])
         .run(tauri::generate_context!())
         .expect("Error while running Tauri application");

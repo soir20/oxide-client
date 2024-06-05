@@ -14,7 +14,8 @@
     "allowlist": {
       "all": false,
       "dialog": {
-        "message": true
+        "message": true,
+        "open": true
       },
       "shell": {
         "all": false,
