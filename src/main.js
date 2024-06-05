@@ -320,28 +320,30 @@ async function initAddClientButton(buttonElement, listElement) {
       directory: false,
       filters: [
         { name: await getI18nValueForKey('settings-add-client-executable-file-type-name'), extensions: ["exe"]},
-        { name: await getI18nValueForKey('settings-add-client-all-file-type-name'), extensions: [""]}
+        { name: await getI18nValueForKey('settings-add-client-all-file-type-name'), extensions: ["*"]}
       ],
       multiple: false,
       title: await getI18nValueForKey('settings-add-client-title')
     })
 
-    const addClient = async () => {
-      const clientVersion = await invoke('add_client', {path: clientPath})
-      await refreshClientList(listElement)
-      message(
-        `${await getI18nValueForKey('settings-added-client')}\n${clientVersion}`,
-        {
-          okLabel: await getI18nValueForKey('ok'),
-          type: 'info'
-        }
+    if (clientPath) {
+      const addClient = async () => {
+        const clientVersion = await invoke('add_client', {path: clientPath})
+        await refreshClientList(listElement)
+        message(
+          `${await getI18nValueForKey('settings-added-client')}\n${clientVersion}`,
+          {
+            okLabel: await getI18nValueForKey('ok'),
+            type: 'info'
+          }
+        )
+      }
+
+      await try_or_show_err_dialog(
+        addClient(),
+        'settings-add-client-error'
       )
     }
-
-    await try_or_show_err_dialog(
-      addClient(),
-      'settings-add-client-error'
-    )
   })
 }
 
@@ -360,6 +362,8 @@ async function refreshClientList(element) {
     listItem.textContent = `${clientVersion} (${clientPath})`
     element.append(listItem)
   }
+
+  return clientList.length
 }
 
 async function main() {
@@ -376,7 +380,12 @@ async function main() {
 
   const clientList = document.getElementById('client-list')
   await initAddClientButton(document.getElementById('add-client-btn'), clientList)
-  await refreshClientList(clientList)
+
+  if (await refreshClientList(clientList) === 0) {
+    document.getElementById('tab-settings').click()
+  } else {
+    document.getElementById('tab-servers').click()
+  }
 }
 
 await main()
