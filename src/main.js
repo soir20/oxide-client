@@ -59,8 +59,7 @@ function changeTab(tabName) {
 
 function initTabs() {
   for (const tab of document.querySelectorAll('.tab')) {
-    tab.addEventListener('click', (e) => {
-      e.preventDefault()
+    tab.addEventListener('click', (_) => {
       if (!tab.id.startsWith(TAB_PREFIX)) {
         throw Error(`Tab ID ${tab.id} is missing tab prefix '${TAB_CONTENT_PREFIX}'`)
       }
@@ -371,8 +370,7 @@ async function main() {
   await loadI18n(document)
   await loadSavedServers()
 
-  document.getElementById('create-saved-server-btn').addEventListener('click', async (e) => {
-    e.preventDefault()
+  document.getElementById('create-saved-server-btn').addEventListener('click', async (_) => {
     await addSavedServer(await getI18nValueForKey('saved-servers-default-name'))
   })
 
