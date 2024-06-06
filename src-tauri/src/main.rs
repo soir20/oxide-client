@@ -2,7 +2,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use std::collections::{HashMap, VecDeque};
-use std::fs::{create_dir_all, read, write};
+use std::fs::{copy, create_dir_all, read, write};
 use std::path::{Path, PathBuf};
 use std::string::ToString;
 use std::sync::Mutex;
@@ -16,13 +16,16 @@ const USER_SETTINGS_PATH: &str = "settings.json";
 const I18N_GLOBAL_CONFIG_PATH: &str = "i18n.json";
 const DEFAULT_LANGUAGE_ID: &str = "en-US";
 const LANGUAGE_NAME_KEY: &str = "name";
+const USER_OPTIONS_TEMPLATE_PATH: &str = "user-options-template.ini";
 
 struct GlobalState {
     settings_path: PathBuf,
     saved_servers_path: PathBuf,
     saved_servers: Mutex<VecDeque<SavedServer>>,
     languages: HashMap<String, Language>,
-    settings: Mutex<Settings>
+    settings: Mutex<Settings>,
+    active_client_path: PathBuf,
+    user_options_template_path: PathBuf
 }
 
 #[derive(Clone, Deserialize, Serialize)]
@@ -180,6 +183,8 @@ fn add_client(path: PathBuf, state: State<GlobalState>) -> Result<String, String
     detect_client_version(&client_bytes).map_or(
         Err("The selected file is not an original Clone Wars Adventures client from 2014 or earlier.".to_string()),
         |client_version| {
+            path.parent().ok_or("Cannot select the root folder as a client")?;
+
             let mut settings = state.settings.lock().expect("Unable to lock settings");
             settings.clients.insert(client_version.clone(), path);
             write_json_to_app_data(&(*settings), &state.settings_path)?;
@@ -192,6 +197,26 @@ fn add_client(path: PathBuf, state: State<GlobalState>) -> Result<String, String
 fn list_clients(state: State<GlobalState>) -> Vec<(String, PathBuf)> {
     let settings = state.inner().settings.lock().expect("Unable to lock settings");
     settings.clients.clone().into_iter().collect()
+}
+
+#[tauri::command]
+fn prepare_client(version: String, state: State<GlobalState>) -> Result<(), String> {
+    let settings = state.inner().settings.lock().expect("Unable to lock settings");
+    let client_path = settings.clients.get(&version).expect("Requested client version that does not exist");
+
+    create_dir_all(&state.active_client_path).map_err(|err| err.to_string())?;
+
+    let active_client_executable_path = state.active_client_path.join("CloneWars.exe");
+    copy(client_path, active_client_executable_path).map_err(|err| err.to_string())?;
+
+    let user_options_path = state.active_client_path.join("UserOptions.ini");
+    if !user_options_path.exists() {
+        copy(&state.user_options_template_path, user_options_path).map_err(|err| err.to_string())?;
+    }
+
+    // TODO: client config
+
+    Ok(())
 }
 
 fn main() {
@@ -230,12 +255,18 @@ fn main() {
                 &read(&languages_path).expect("Missing languages file")
             ).expect("Bad languages file");
 
+            let active_client_path = app_data_dir.join("active_client/");
+            let user_options_template_path = app.path_resolver().resolve_resource(USER_OPTIONS_TEMPLATE_PATH)
+                .expect("Unable to resolve user options template file");
+
             app.manage(GlobalState {
                 settings_path,
                 saved_servers_path,
                 saved_servers: Mutex::new(saved_servers),
                 languages,
                 settings: Mutex::new(settings),
+                active_client_path,
+                user_options_template_path,
             });
 
             Ok(())
@@ -253,7 +284,8 @@ fn main() {
             remove_saved_server,
             reorder_saved_servers,
             add_client,
-            list_clients
+            list_clients,
+            prepare_client
         ])
         .run(tauri::generate_context!())
         .expect("Error while running Tauri application");
