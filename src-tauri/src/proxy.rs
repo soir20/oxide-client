@@ -12,7 +12,6 @@ use tokio::fs::{OpenOptions, read, read_dir};
 use tokio::{io, spawn};
 use tokio::io::{AsyncReadExt, AsyncSeekExt};
 use tokio::net::TcpListener;
-use tokio::task::JoinHandle;
 use bytes::Bytes;
 
 async fn list_files(root_dir: &std::path::Path) -> io::Result<Vec<PathBuf>> {
@@ -193,20 +192,15 @@ async fn asset_handler(
     }
 }
 
-fn start_proxy(port: u16, client_folder: PathBuf, game_server_uri: Url) -> JoinHandle<io::Result<()>> {
-    spawn(async move {
-        let client = Client::new();
-        let asset_map = build_asset_map(&client_folder).await?;
-        let app = Router::new()
-            .route("/assets/*asset", get(asset_handler))
-            .with_state((Arc::new(client), Arc::new(asset_map), Arc::new(game_server_uri.clone())));
+pub async fn start_proxy(port: u16, client_folder: PathBuf, game_server_uri: Url) -> io::Result<()> {
+    let client = Client::new();
+    let asset_map = build_asset_map(&client_folder).await?;
+    let app = Router::new()
+        .route("/assets/*asset", get(asset_handler))
+        .with_state((Arc::new(client), Arc::new(asset_map), Arc::new(game_server_uri.clone())));
 
-        let listener = TcpListener::bind(format!("127.0.0.1:{}", port))
-            .await?;
-        println!("Proxy listening on {}", listener.local_addr().expect("Listener has no address"));
-        serve(listener, app).await
-            .expect("Couldn't start proxy with Axum, even though this should be infallible");
-
-        Ok(())
-    })
+    let listener = TcpListener::bind(format!("127.0.0.1:{}", port))
+        .await?;
+    println!("Proxy listening on {}", listener.local_addr().expect("Listener has no address"));
+    serve(listener, app).await
 }
