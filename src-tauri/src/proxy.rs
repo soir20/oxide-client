@@ -198,10 +198,7 @@ fn start_proxy(port: u16, client_folder: PathBuf, game_server_uri: Url) -> JoinH
         let client = Client::new();
         let asset_map = build_asset_map(&client_folder).await?;
         let app = Router::new()
-            .route(
-                "/assets/:asset",
-                get(asset_handler)
-            )
+            .route("/assets/*asset", get(asset_handler))
             .with_state((Arc::new(client), Arc::new(asset_map), Arc::new(game_server_uri.clone())));
 
         let listener = TcpListener::bind(format!("127.0.0.1:{}", port))
