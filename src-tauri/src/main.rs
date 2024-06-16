@@ -1,6 +1,8 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod proxy;
+
 use std::collections::{HashMap, VecDeque};
 use std::fs::{copy, create_dir_all, read, write};
 use std::path::{Path, PathBuf};

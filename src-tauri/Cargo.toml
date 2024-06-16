@@ -13,8 +13,12 @@ edition = "2021"
 tauri-build = { version = "1.4", features = [] }
 
 [dependencies]
+axum = "0.7.5"
+crc32fast = "1.4.2"
 regex = "1.10.4"
+reqwest = "0.12.4"
 tauri = { version = "1.4", features = [ "dialog-open", "dialog-message", "shell-open"] }
+tokio = { version = "1.38.0", features = ["fs", "io-util"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 
