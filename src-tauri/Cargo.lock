@@ -1986,6 +1986,7 @@ name = "oxide-client"
 version = "0.0.0"
 dependencies = [
  "axum",
+ "bytes",
  "crc32fast",
  "regex",
  "reqwest",

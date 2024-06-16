@@ -1,10 +1,19 @@
 use std::collections::{HashMap, VecDeque};
 use std::io::SeekFrom;
-use std::path::PathBuf;
+use std::path::{Component, PathBuf};
+use std::sync::Arc;
 
-use tokio::{io, spawn};
+use axum::{Router, serve};
+use axum::extract::{Path, Request, State};
+use axum::http::StatusCode;
+use axum::routing::get;
+use reqwest::{Client, Url};
 use tokio::fs::{OpenOptions, read, read_dir};
+use tokio::{io, spawn};
 use tokio::io::{AsyncReadExt, AsyncSeekExt};
+use tokio::net::TcpListener;
+use tokio::task::JoinHandle;
+use bytes::Bytes;
 
 async fn list_files(root_dir: &std::path::Path) -> io::Result<Vec<PathBuf>> {
     let mut files = Vec::new();
@@ -124,4 +133,83 @@ async fn build_asset_map(client_folder: &PathBuf) -> io::Result<AssetMap> {
     }
 
     Ok(asset_map)
+}
+
+async fn asset_handler(
+    Path(asset_name): Path<PathBuf>,
+    State((http_client, asset_map, game_server_url)): State<(Arc<Client>, Arc<AssetMap>, Arc<Url>)>,
+    request: Request,
+) -> Result<Bytes, StatusCode> {
+    // SECURITY: Ensure that the path is within the assets cache before returning any data.
+    // Reject all paths containing anything other than normal folder names (e.g. paths containing
+    // the parent directory or the root directory).
+    let is_invalid_path = asset_name
+        .components()
+        .any(|component| !matches!(component, Component::Normal(_)));
+    if is_invalid_path {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    let queried_crc = if let Some(query) = request.uri().query() {
+        Some(str::parse(query).map_err(|_| StatusCode::BAD_REQUEST)?)
+    } else {
+        None
+    };
+
+    let possible_file_data = if let Some(asset_locator) = asset_map.get(&asset_name) {
+        let crc = queried_crc.unwrap_or(asset_locator.crc);
+        if crc == asset_locator.crc {
+            read(&asset_locator.path)
+                .await
+                .ok()
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    if let Some(file_data) = possible_file_data {
+        Ok(file_data.into())
+    } else {
+        let request_path = request.uri().path();
+        let path_and_query = request
+            .uri()
+            .path_and_query()
+            .map(|path_and_query| path_and_query.as_str())
+            .unwrap_or(request_path);
+        let url = game_server_url.join(path_and_query)
+            .map_err(|_| StatusCode::BAD_REQUEST)?;
+
+        Ok(
+            http_client.get(url)
+                .send()
+                .await
+                .map_err(|err| err.status().unwrap_or(StatusCode::INTERNAL_SERVER_ERROR))?
+                .bytes()
+                .await
+                .map_err(|err| err.status().unwrap_or(StatusCode::INTERNAL_SERVER_ERROR))?
+        )
+    }
+}
+
+fn start_proxy(port: u16, client_folder: PathBuf, game_server_uri: Url) -> JoinHandle<io::Result<()>> {
+    spawn(async move {
+        let client = Client::new();
+        let asset_map = build_asset_map(&client_folder).await?;
+        let app = Router::new()
+            .route(
+                "/assets/:asset",
+                get(asset_handler)
+            )
+            .with_state((Arc::new(client), Arc::new(asset_map), Arc::new(game_server_uri.clone())));
+
+        let listener = TcpListener::bind(format!("127.0.0.1:{}", port))
+            .await?;
+        println!("Proxy listening on {}", listener.local_addr().expect("Listener has no address"));
+        serve(listener, app).await
+            .expect("Couldn't start proxy with Axum, even though this should be infallible");
+
+        Ok(())
+    })
 }
