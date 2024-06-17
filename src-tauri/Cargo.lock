@@ -1988,6 +1988,7 @@ dependencies = [
  "axum",
  "bytes",
  "crc32fast",
+ "miniz_oxide",
  "regex",
  "reqwest",
  "serde",

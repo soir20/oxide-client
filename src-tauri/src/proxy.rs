@@ -10,9 +10,14 @@ use axum::routing::get;
 use reqwest::{Client, Url};
 use tokio::fs::{OpenOptions, read, read_dir};
 use tokio::{io, spawn};
-use tokio::io::{AsyncReadExt, AsyncSeekExt};
+use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 use bytes::Bytes;
+use miniz_oxide::deflate::compress_to_vec_zlib;
+
+const MAGIC: u32 = 0xa1b2c3d4;
+const ZLIB_COMPRESSION_LEVEL: u8 = 6;
+const COMPRESSED_EXTENSION: &str = "z";
 
 async fn list_files(root_dir: &std::path::Path) -> io::Result<Vec<PathBuf>> {
     let mut files = Vec::new();
@@ -134,6 +139,37 @@ async fn build_asset_map(client_folder: &PathBuf) -> io::Result<AssetMap> {
     Ok(asset_map)
 }
 
+async fn build_local_asset_response(asset_locator: &AssetLocator, compress: bool) -> io::Result<Vec<u8>> {
+    let mut buffer = Vec::new();
+    buffer.write_u32(MAGIC).await?;
+
+    // Read file from local client folder
+    let mut file = OpenOptions::new()
+        .read(true)
+        .open(&asset_locator.path)
+        .await?;
+    file.seek(SeekFrom::Start(asset_locator.data_offset))
+        .await?;
+
+    let mut file_buffer = vec![0; asset_locator.size as usize];
+    file.read_exact(&mut file_buffer).await?;
+
+
+    buffer
+        .write_u32(file_buffer.len() as u32)
+        .await?;
+    if compress {
+        buffer.append(&mut compress_to_vec_zlib(
+            &file_buffer,
+            ZLIB_COMPRESSION_LEVEL,
+        ));
+    } else {
+        buffer.append(&mut file_buffer);
+    }
+
+    Ok(buffer)
+}
+
 async fn asset_handler(
     Path(asset_name): Path<PathBuf>,
     State((http_client, asset_map, game_server_url)): State<(Arc<Client>, Arc<AssetMap>, Arc<Url>)>,
@@ -155,12 +191,18 @@ async fn asset_handler(
         None
     };
 
-    let possible_file_data = if let Some(asset_locator) = asset_map.get(&asset_name) {
+    let mut uncompressed_asset_name = asset_name.clone();
+    if let Some(extension) = uncompressed_asset_name.extension() {
+        if extension == COMPRESSED_EXTENSION {
+            uncompressed_asset_name.set_extension("");
+        }
+    }
+    let compress = uncompressed_asset_name != asset_name;
+
+    let possible_file_data = if let Some(asset_locator) = asset_map.get(&uncompressed_asset_name) {
         let crc = queried_crc.unwrap_or(asset_locator.crc);
         if crc == asset_locator.crc {
-            read(&asset_locator.path)
-                .await
-                .ok()
+            build_local_asset_response(&asset_locator, compress).await.ok()
         } else {
             None
         }

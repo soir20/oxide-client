@@ -16,6 +16,7 @@ tauri-build = { version = "1.4", features = [] }
 axum = "0.7.5"
 bytes = "1.6.0"
 crc32fast = "1.4.2"
+miniz_oxide = "0.7.2"
 regex = "1.10.4"
 reqwest = "0.12.4"
 tauri = { version = "1.4", features = [ "dialog-open", "dialog-message", "shell-open"] }
