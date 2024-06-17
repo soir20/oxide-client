@@ -222,15 +222,20 @@ async fn asset_handler(
         let url = game_server_url.join(path_and_query)
             .map_err(|_| StatusCode::BAD_REQUEST)?;
 
-        Ok(
-            http_client.get(url)
-                .send()
-                .await
-                .map_err(|err| err.status().unwrap_or(StatusCode::INTERNAL_SERVER_ERROR))?
-                .bytes()
-                .await
-                .map_err(|err| err.status().unwrap_or(StatusCode::INTERNAL_SERVER_ERROR))?
-        )
+        let response = http_client.get(url)
+            .send()
+            .await
+            .map_err(|err| err.status().unwrap_or(StatusCode::INTERNAL_SERVER_ERROR))?;
+
+        match response.status() {
+            StatusCode::OK => Ok(
+                response
+                    .bytes()
+                    .await
+                    .map_err(|err| err.status().unwrap_or(StatusCode::INTERNAL_SERVER_ERROR))?
+            ),
+            status_code => Err(status_code),
+        }
     }
 }
 
