@@ -19,6 +19,7 @@ crc32fast = "1.4.2"
 miniz_oxide = "0.7.2"
 regex = "1.10.4"
 reqwest = "0.12.4"
+rust-ini = "0.21.0"
 tauri = { version = "1.4", features = [ "dialog-open", "dialog-message", "shell-open"] }
 tokio = { version = "1.38.0", features = ["fs", "io-util"] }
 serde = { version = "1.0", features = ["derive"] }

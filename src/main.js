@@ -4,6 +4,7 @@ const { message, open } = window.__TAURI__.dialog
 const SAVED_SERVERS_LIST_ID = 'saved-servers'
 const SAVED_SERVER_WRITE_FAILED_I18N_KEY = 'saved-servers-write-failed'
 const SETTINGS_WRITE_FAILED_I18N_KEY = 'settings-write-failed'
+const CLIENT_START_FAILED_I18N_KEY = 'client-start-failed'
 const I18N_CLASS_NAME = 'i18n'
 const I18N_KEY_ATTR = 'data-i18n-key'
 
@@ -171,10 +172,10 @@ async function buildSavedServerElement(savedServersElm, savedServer, isEditing) 
   const playButton = document.createElement('button')
   playButton.classList.add(I18N_CLASS_NAME)
   playButton.setAttribute(I18N_KEY_ATTR, 'saved-servers-play')
-  playButton.addEventListener('click', async () => {
-    await invoke('prepare_client', { version: "0.180.1.530619" })
-    console.log('done preparing client')
-  })
+  playButton.addEventListener('click', async () => await try_or_show_err_dialog(
+    invoke('start_client', { index: serverIndex(savedServersElm, serverElm), version: "0.180.1.530619" }),
+    CLIENT_START_FAILED_I18N_KEY
+  ))
   buttonContainer.append(playButton)
 
   // Edit container

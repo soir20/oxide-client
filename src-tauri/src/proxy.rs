@@ -1,4 +1,5 @@
 use std::collections::{HashMap, VecDeque};
+use std::future::Future;
 use std::io::SeekFrom;
 use std::path::{Component, PathBuf};
 use std::sync::Arc;
@@ -99,7 +100,7 @@ async fn list_assets_in_pack(pack_path: PathBuf) -> io::Result<(PathBuf, Vec<Ass
     Ok((pack_path, results))
 }
 
-async fn build_asset_map(client_folder: &PathBuf) -> io::Result<AssetMap> {
+async fn build_asset_map(client_folder: &std::path::Path) -> io::Result<AssetMap> {
     let mut asset_map = HashMap::new();
     let mut tasks = Vec::new();
 
@@ -239,9 +240,13 @@ async fn asset_handler(
     }
 }
 
-pub async fn start_proxy(port: u16, client_folder: PathBuf, game_server_uri: Url) -> io::Result<()> {
+async fn start_proxy(listener: TcpListener, app: Router) {
+    serve(listener, app).await.expect("Unable to start proxy");
+}
+
+pub async fn prepare_proxy(port: u16, client_folder: &std::path::Path, game_server_uri: Url) -> io::Result<impl Future<Output=()>> {
     let client = Client::new();
-    let asset_map = build_asset_map(&client_folder).await?;
+    let asset_map = build_asset_map(client_folder).await?;
     let app = Router::new()
         .route("/assets/*asset", get(asset_handler))
         .with_state((Arc::new(client), Arc::new(asset_map), Arc::new(game_server_uri.clone())));
@@ -249,5 +254,5 @@ pub async fn start_proxy(port: u16, client_folder: PathBuf, game_server_uri: Url
     let listener = TcpListener::bind(format!("127.0.0.1:{}", port))
         .await?;
     println!("Proxy listening on {}", listener.local_addr().expect("Listener has no address"));
-    serve(listener, app).await
+    Ok(start_proxy(listener, app))
 }

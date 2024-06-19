@@ -1,17 +1,23 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-mod proxy;
-
 use std::collections::{HashMap, VecDeque};
 use std::fs::{copy, create_dir_all, read, write};
 use std::path::{Path, PathBuf};
 use std::string::ToString;
 use std::sync::Mutex;
 
+use ini::Ini;
 use regex::bytes::Regex;
+use reqwest::Url;
 use serde::{Deserialize, Serialize};
 use tauri::{Manager, State};
+use tokio::spawn;
+use tokio::task::JoinHandle;
+
+use crate::proxy::prepare_proxy;
+
+mod proxy;
 
 const SAVED_SERVERS_PATH: &str = "saved-servers.json";
 const USER_SETTINGS_PATH: &str = "settings.json";
@@ -27,7 +33,8 @@ struct GlobalState {
     languages: HashMap<String, Language>,
     settings: Mutex<Settings>,
     active_client_path: PathBuf,
-    user_options_template_path: PathBuf
+    user_options_template_path: PathBuf,
+    proxy_process: tokio::sync::Mutex<Option<JoinHandle<()>>>
 }
 
 #[derive(Clone, Deserialize, Serialize)]
@@ -40,7 +47,8 @@ struct SavedServer {
 #[derive(Deserialize, Serialize)]
 struct Settings {
     clients: HashMap<String, PathBuf>,
-    language: String
+    language: String,
+    proxy_port: u16
 }
 
 type Language = HashMap<String, String>;
@@ -89,6 +97,48 @@ fn detect_client_version(client_bytes: &[u8]) -> Option<String> {
 fn remove_missing_clients(settings: &mut Settings, settings_path: &PathBuf) -> Result<(), String> {
     settings.clients.retain(|_, path| path.try_exists().unwrap_or_else(|_| true));
     write_json_to_app_data(&(*settings), settings_path)
+}
+
+fn prepare_client(version: String, state: &State<GlobalState>) -> Result<u16, String> {
+    let settings = state.inner().settings.lock().expect("Unable to lock settings");
+    let client_path = settings.clients.get(&version).ok_or("Requested client version that does not exist")?;
+
+    create_dir_all(&state.active_client_path).map_err(|err| err.to_string())?;
+
+    let active_client_executable_path = state.active_client_path.join("CloneWars.exe");
+    copy(client_path, active_client_executable_path).map_err(|err| err.to_string())?;
+
+    let user_options_path = state.active_client_path.join("UserOptions.ini");
+    if !user_options_path.exists() {
+        copy(&state.user_options_template_path, user_options_path).map_err(|err| err.to_string())?;
+    }
+
+    let proxy_url = format!("http://127.0.0.1:{}", settings.proxy_port);
+    let proxy_assets_url = format!("{}/assets", proxy_url);
+    let proxy_card_assets_url = format!("{}/card_games/", proxy_assets_url);
+    let proxy_crash_url = format!("{}/crash?code=G", proxy_url);
+    let mut client_config = Ini::new();
+    client_config.with_section::<String>(None)
+        .set("World", "");
+    client_config.with_section(Some("Paths"))
+        .set("PathScripts", "./Resources/Scripts/")
+        .set("PathUiModules", "./UI/UiModules/");
+    client_config.with_section(Some("Libraries"))
+        .set("GraphicsDLL", "./GraphicsDriver.dll")
+        .set("GraphicsDLLd", "./GraphicsDriver.dll")
+        .set("GraphicsDllDataPath", "./");
+    client_config.with_section(Some("AssetDelivery"))
+        .set("IndirectEnabled", "1")
+        .set("IndirectServerAddress", proxy_assets_url)
+        .set("TcgServerAddress", proxy_card_assets_url);
+    client_config.with_section(Some("LoadingScreen"))
+        .set("LoadingScreenMusicId", "1144");
+    client_config.with_section(Some("WebResources"))
+        .set("GameCrashUrl", proxy_crash_url);
+    let client_config_path = state.active_client_path.join("ClientConfig.ini");
+    client_config.write_to_file(client_config_path).map_err(|err| err.to_string())?;
+
+    Ok(settings.proxy_port)
 }
 
 #[tauri::command]
@@ -202,21 +252,31 @@ fn list_clients(state: State<GlobalState>) -> Vec<(String, PathBuf)> {
 }
 
 #[tauri::command]
-fn prepare_client(version: String, state: State<GlobalState>) -> Result<(), String> {
-    let settings = state.inner().settings.lock().expect("Unable to lock settings");
-    let client_path = settings.clients.get(&version).expect("Requested client version that does not exist");
+async fn start_client(index: usize, version: String, state: State<'_, GlobalState>) -> Result<(), String> {
+    let proxy_port = prepare_client(version, &state)?;
+    let (client_folder, https_endpoint) = {
+        let saved_servers = state.inner().saved_servers.lock()
+            .expect("Unable to lock saved servers");
 
-    create_dir_all(&state.active_client_path).map_err(|err| err.to_string())?;
+        let client_folder = state.active_client_path.parent().expect("Active client has no parent folder");
+        let https_endpoint = Url::parse(&saved_servers[index].https_endpoint)
+            .map_err(|err| format!("bad HTTPS endpoint: {}", err))?;
 
-    let active_client_executable_path = state.active_client_path.join("CloneWars.exe");
-    copy(client_path, active_client_executable_path).map_err(|err| err.to_string())?;
+        (client_folder, https_endpoint)
+    };
 
-    let user_options_path = state.active_client_path.join("UserOptions.ini");
-    if !user_options_path.exists() {
-        copy(&state.user_options_template_path, user_options_path).map_err(|err| err.to_string())?;
+    let mut proxy_process_lock = state.proxy_process.lock().await;
+    if let Some(old_proxy_process) = &*proxy_process_lock {
+        println!("Previous proxy stopping");
+        old_proxy_process.abort();
     }
 
-    // TODO: client config
+    let proxy_future = prepare_proxy(proxy_port, client_folder, https_endpoint)
+        .await
+        .map_err(|err| err.to_string())?;
+
+    let proxy_process = spawn(proxy_future);
+    *proxy_process_lock = Some(proxy_process);
 
     Ok(())
 }
@@ -243,7 +303,8 @@ fn main() {
                     println!("Unable to read settings file: {}", err);
                     Settings {
                         clients: HashMap::new(),
-                        language: DEFAULT_LANGUAGE_ID.to_string()
+                        language: DEFAULT_LANGUAGE_ID.to_string(),
+                        proxy_port: 4001,
                     }
                 }
             };
@@ -269,6 +330,7 @@ fn main() {
                 settings: Mutex::new(settings),
                 active_client_path,
                 user_options_template_path,
+                proxy_process: tokio::sync::Mutex::new(None),
             });
 
             Ok(())
@@ -287,7 +349,7 @@ fn main() {
             reorder_saved_servers,
             add_client,
             list_clients,
-            prepare_client
+            start_client
         ])
         .run(tauri::generate_context!())
         .expect("Error while running Tauri application");
