@@ -172,10 +172,14 @@ async function buildSavedServerElement(savedServersElm, savedServer, isEditing) 
   const playButton = document.createElement('button')
   playButton.classList.add(I18N_CLASS_NAME)
   playButton.setAttribute(I18N_KEY_ATTR, 'saved-servers-play')
-  playButton.addEventListener('click', async () => await try_or_show_err_dialog(
-    invoke('start_client', { index: serverIndex(savedServersElm, serverElm), version: "0.180.1.530619" }),
-    CLIENT_START_FAILED_I18N_KEY
-  ))
+  playButton.addEventListener('click', async () => {
+    playButton.disabled = true
+    await try_or_show_err_dialog(
+      invoke('start_client', { index: serverIndex(savedServersElm, serverElm), version: "0.180.1.530619" }),
+      CLIENT_START_FAILED_I18N_KEY
+    )
+    playButton.disabled = false
+  })
   buttonContainer.append(playButton)
 
   // Edit container

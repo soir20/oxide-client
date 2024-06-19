@@ -166,6 +166,10 @@ p {
   background-color: var(--bg-highlight-color);
 }
 
+#saved-servers button:disabled {
+  opacity: 0.5;
+}
+
 #saved-servers > li {
   background: var(--holo-bg);
   border: 1px solid var(--holo-bg-color);
