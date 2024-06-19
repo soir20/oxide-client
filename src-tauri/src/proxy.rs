@@ -16,7 +16,7 @@ use tokio::net::TcpListener;
 use bytes::Bytes;
 use miniz_oxide::deflate::compress_to_vec_zlib;
 
-const MAGIC: u32 = 0xa1b2c3d4;
+const COMPRESSED_MAGIC: u32 = 0xa1b2c3d4;
 const ZLIB_COMPRESSION_LEVEL: u8 = 6;
 const COMPRESSED_EXTENSION: &str = "z";
 
@@ -142,7 +142,6 @@ async fn build_asset_map(client_folder: &std::path::Path) -> io::Result<AssetMap
 
 async fn build_local_asset_response(asset_locator: &AssetLocator, compress: bool) -> io::Result<Vec<u8>> {
     let mut buffer = Vec::new();
-    buffer.write_u32(MAGIC).await?;
 
     // Read file from local client folder
     let mut file = OpenOptions::new()
@@ -155,11 +154,11 @@ async fn build_local_asset_response(asset_locator: &AssetLocator, compress: bool
     let mut file_buffer = vec![0; asset_locator.size as usize];
     file.read_exact(&mut file_buffer).await?;
 
-
-    buffer
-        .write_u32(file_buffer.len() as u32)
-        .await?;
     if compress {
+        buffer.write_u32(COMPRESSED_MAGIC).await?;
+        buffer
+            .write_u32(file_buffer.len() as u32)
+            .await?;
         buffer.append(&mut compress_to_vec_zlib(
             &file_buffer,
             ZLIB_COMPRESSION_LEVEL,
