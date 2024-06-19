@@ -99,10 +99,7 @@ fn remove_missing_clients(settings: &mut Settings, settings_path: &PathBuf) -> R
     write_json_to_app_data(&(*settings), settings_path)
 }
 
-fn prepare_client(version: String, state: &State<GlobalState>) -> Result<u16, String> {
-    let settings = state.inner().settings.lock().expect("Unable to lock settings");
-    let client_path = settings.clients.get(&version).ok_or("Requested client version that does not exist")?;
-
+fn prepare_client(proxy_port: u16, client_path: &PathBuf, state: &State<GlobalState>) -> Result<(), String> {
     create_dir_all(&state.active_client_path).map_err(|err| err.to_string())?;
 
     let active_client_executable_path = state.active_client_path.join("CloneWars.exe");
@@ -113,7 +110,7 @@ fn prepare_client(version: String, state: &State<GlobalState>) -> Result<u16, St
         copy(&state.user_options_template_path, user_options_path).map_err(|err| err.to_string())?;
     }
 
-    let proxy_url = format!("http://127.0.0.1:{}", settings.proxy_port);
+    let proxy_url = format!("http://127.0.0.1:{}", proxy_port);
     let proxy_assets_url = format!("{}/assets", proxy_url);
     let proxy_card_assets_url = format!("{}/card_games/", proxy_assets_url);
     let proxy_crash_url = format!("{}/crash?code=G", proxy_url);
@@ -138,7 +135,7 @@ fn prepare_client(version: String, state: &State<GlobalState>) -> Result<u16, St
     let client_config_path = state.active_client_path.join("ClientConfig.ini");
     client_config.write_to_file(client_config_path).map_err(|err| err.to_string())?;
 
-    Ok(settings.proxy_port)
+    Ok(())
 }
 
 #[tauri::command]
@@ -253,16 +250,21 @@ fn list_clients(state: State<GlobalState>) -> Vec<(String, PathBuf)> {
 
 #[tauri::command]
 async fn start_client(index: usize, version: String, state: State<'_, GlobalState>) -> Result<(), String> {
-    let proxy_port = prepare_client(version, &state)?;
-    let (client_folder, https_endpoint) = {
+    let (proxy_port, client_directory, https_endpoint) = {
+        let settings = state.inner().settings.lock().expect("Unable to lock settings");
+
+        let proxy_port = settings.proxy_port;
+        let client_path = settings.clients.get(&version).ok_or("Requested client version that does not exist")?;
+        let client_directory = client_path.parent().ok_or("Client has no parent directory")?.to_path_buf();
+        prepare_client(proxy_port, client_path, &state)?;
+        
         let saved_servers = state.inner().saved_servers.lock()
             .expect("Unable to lock saved servers");
 
-        let client_folder = state.active_client_path.parent().expect("Active client has no parent folder");
         let https_endpoint = Url::parse(&saved_servers[index].https_endpoint)
             .map_err(|err| format!("bad HTTPS endpoint: {}", err))?;
 
-        (client_folder, https_endpoint)
+        (proxy_port, client_directory, https_endpoint)
     };
 
     let mut proxy_process_lock = state.proxy_process.lock().await;
@@ -271,7 +273,7 @@ async fn start_client(index: usize, version: String, state: State<'_, GlobalStat
         old_proxy_process.abort();
     }
 
-    let proxy_future = prepare_proxy(proxy_port, client_folder, https_endpoint)
+    let proxy_future = prepare_proxy(proxy_port, &client_directory, https_endpoint)
         .await
         .map_err(|err| err.to_string())?;
 
