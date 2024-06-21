@@ -2,8 +2,10 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use std::collections::{HashMap, VecDeque};
-use std::fs::{copy, create_dir_all, read, write};
+use std::fs::{copy, create_dir_all, read, read_dir, write};
+use std::io;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 use std::string::ToString;
 use std::sync::Mutex;
 
@@ -13,7 +15,7 @@ use reqwest::Url;
 use serde::{Deserialize, Serialize};
 use tauri::{Manager, State};
 use tokio::spawn;
-use tokio::task::JoinHandle;
+use tokio::task::{JoinHandle, spawn_blocking};
 
 use crate::proxy::prepare_proxy;
 
@@ -25,6 +27,9 @@ const I18N_GLOBAL_CONFIG_PATH: &str = "i18n.json";
 const DEFAULT_LANGUAGE_ID: &str = "en-US";
 const LANGUAGE_NAME_KEY: &str = "name";
 const USER_OPTIONS_TEMPLATE_PATH: &str = "user-options-template.ini";
+const CLIENT_CONFIG_PATH: &str = "ClientConfig.ini";
+const USER_OPTIONS_PATH: &str = "UserOptions.ini";
+const ACTIVE_CLIENT_EXECUTABLE: &str = "CloneWars.exe";
 
 struct GlobalState {
     settings_path: PathBuf,
@@ -34,7 +39,7 @@ struct GlobalState {
     settings: Mutex<Settings>,
     active_client_path: PathBuf,
     user_options_template_path: PathBuf,
-    proxy_process: tokio::sync::Mutex<Option<JoinHandle<()>>>
+    proxy_process: tokio::sync::Mutex<Option<(JoinHandle<()>, JoinHandle<()>)>>
 }
 
 #[derive(Clone, Deserialize, Serialize)]
@@ -99,13 +104,65 @@ fn remove_missing_clients(settings: &mut Settings, settings_path: &PathBuf) -> R
     write_json_to_app_data(&(*settings), settings_path)
 }
 
-fn prepare_client(proxy_port: u16, client_path: &PathBuf, state: &State<GlobalState>) -> Result<(), String> {
+fn list_files(root_dir: &Path, filter: impl Fn(&Path) -> bool) -> io::Result<Vec<PathBuf>> {
+    let mut files = Vec::new();
+
+    let mut directories = VecDeque::new();
+    directories.push_back(root_dir.to_path_buf());
+
+    while let Some(dir) = directories.pop_front() {
+        if dir.is_dir() {
+            let mut entries = read_dir(dir)?;
+            while let Some(entry) = entries.next() {
+                let path = entry?.path();
+                if path.is_dir() {
+                    directories.push_back(path);
+                } else if filter(&path) {
+                    files.push(path.strip_prefix(root_dir).unwrap().to_path_buf());
+                }
+            }
+        }
+    }
+
+    Ok(files)
+}
+
+fn is_web_downloaded_pack(file_name: &String) -> bool {
+    file_name.contains("W_") && file_name.ends_with(".pack")
+}
+
+fn should_copy(path: &Path) -> bool {
+    if let Some(file_name) = path.file_name() {
+        if let Ok(file_name_str) = file_name.to_os_string().into_string() {
+            file_name_str != ACTIVE_CLIENT_EXECUTABLE
+                && file_name_str != CLIENT_CONFIG_PATH
+                && file_name_str != USER_OPTIONS_PATH
+                && !is_web_downloaded_pack(&file_name_str)
+        } else {
+            true
+        }
+    } else {
+        true
+    }
+}
+
+fn prepare_client(proxy_port: u16, client_path: &PathBuf, client_parent: &PathBuf, state: &State<GlobalState>) -> Result<(), String> {
     create_dir_all(&state.active_client_path).map_err(|err| err.to_string())?;
 
-    let active_client_executable_path = state.active_client_path.join("CloneWars.exe");
+    let active_client_executable_path = state.active_client_path.join(ACTIVE_CLIENT_EXECUTABLE);
     copy(client_path, active_client_executable_path).map_err(|err| err.to_string())?;
 
-    let user_options_path = state.active_client_path.join("UserOptions.ini");
+    let client_files_to_copy = list_files(client_parent, should_copy)
+        .map_err(|err| err.to_string())?;
+    for path in client_files_to_copy {
+        let source = client_parent.join(&path);
+        let destination = state.active_client_path.join(&path);
+        create_dir_all(&destination.parent().expect("Active client path has no parent"))
+            .map_err(|err| err.to_string())?;
+        copy(source, destination).map_err(|err| err.to_string())?;
+    }
+
+    let user_options_path = state.active_client_path.join(USER_OPTIONS_PATH);
     if !user_options_path.exists() {
         copy(&state.user_options_template_path, user_options_path).map_err(|err| err.to_string())?;
     }
@@ -132,7 +189,7 @@ fn prepare_client(proxy_port: u16, client_path: &PathBuf, state: &State<GlobalSt
         .set("LoadingScreenMusicId", "1144");
     client_config.with_section(Some("WebResources"))
         .set("GameCrashUrl", proxy_crash_url);
-    let client_config_path = state.active_client_path.join("ClientConfig.ini");
+    let client_config_path = state.active_client_path.join(CLIENT_CONFIG_PATH);
     client_config.write_to_file(client_config_path).map_err(|err| err.to_string())?;
 
     Ok(())
@@ -250,25 +307,30 @@ fn list_clients(state: State<GlobalState>) -> Vec<(String, PathBuf)> {
 
 #[tauri::command]
 async fn start_client(index: usize, version: String, state: State<'_, GlobalState>) -> Result<(), String> {
-    let (proxy_port, client_directory, https_endpoint) = {
+    let (proxy_port, client_directory, udp_endpoint, https_endpoint) = {
         let settings = state.inner().settings.lock().expect("Unable to lock settings");
 
         let proxy_port = settings.proxy_port;
         let client_path = settings.clients.get(&version).ok_or("Requested client version that does not exist")?;
         let client_directory = client_path.parent().ok_or("Client has no parent directory")?.to_path_buf();
-        prepare_client(proxy_port, client_path, &state)?;
+        prepare_client(proxy_port, client_path, &client_directory, &state)?;
         
         let saved_servers = state.inner().saved_servers.lock()
             .expect("Unable to lock saved servers");
 
+        let udp_endpoint = saved_servers[index].udp_endpoint.clone();
         let https_endpoint = Url::parse(&saved_servers[index].https_endpoint)
             .map_err(|err| format!("bad HTTPS endpoint: {}", err))?;
 
-        (proxy_port, client_directory, https_endpoint)
+        (proxy_port, client_directory, udp_endpoint, https_endpoint)
     };
 
     let mut proxy_process_lock = state.proxy_process.lock().await;
-    if let Some(old_proxy_process) = &*proxy_process_lock {
+    if let Some((old_proxy_process, ref mut old_client_process)) = &mut *proxy_process_lock {
+        if !old_client_process.is_finished() {
+            return Err("Game is already running".to_string());
+        }
+
         println!("Previous proxy stopping");
         old_proxy_process.abort();
     }
@@ -278,7 +340,40 @@ async fn start_client(index: usize, version: String, state: State<'_, GlobalStat
         .map_err(|err| err.to_string())?;
 
     let proxy_process = spawn(proxy_future);
-    *proxy_process_lock = Some(proxy_process);
+
+    let active_client_path = state.active_client_path.clone();
+    let active_client_executable_path = active_client_path.join(ACTIVE_CLIENT_EXECUTABLE);
+    let client_process = spawn_blocking(move || {
+        let command = Command::new(active_client_executable_path)
+            .current_dir(active_client_path)
+            .arg(format!("inifile={}", CLIENT_CONFIG_PATH))
+            .arg("Guid=1")
+            .arg(format!("Server={}", udp_endpoint))
+            .arg("Ticket=p7w9dGPBPbbm9ZG")
+            .arg("Internationalization:Locale=8")
+            .arg("LoadingScreenId=-1")
+            .arg("LiveGamer=1")
+            .spawn();
+        match command {
+            Ok(process) => {
+                let possible_output = process.wait_with_output();
+                match possible_output {
+                    Ok(output) => {
+                        println!(
+                            "Client finished with status code: {}\nstdout:\n{}\nstderr:\n{}",
+                            output.status,
+                            String::from_utf8_lossy(&output.stdout),
+                            String::from_utf8_lossy(&output.stderr)
+                        );
+                    },
+                    Err(err) => println!("Failed to wait for client to finish: {}", err)
+                }
+            },
+            Err(err) => println!("Client failed to start: {}", err)
+        }
+    });
+
+    *proxy_process_lock = Some((proxy_process, client_process));
 
     Ok(())
 }
