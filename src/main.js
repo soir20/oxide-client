@@ -8,6 +8,10 @@ const CLIENT_START_FAILED_I18N_KEY = 'client-start-failed'
 const I18N_CLASS_NAME = 'i18n'
 const I18N_KEY_ATTR = 'data-i18n-key'
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
 function debounce(callback, wait) {
   let timeoutId = null
   return (...args) => {
@@ -178,6 +182,10 @@ async function buildSavedServerElement(savedServersElm, savedServer, isEditing) 
       invoke('start_client', { index: serverIndex(savedServersElm, serverElm), version: "0.180.1.530619" }),
       CLIENT_START_FAILED_I18N_KEY
     )
+
+    // Sleep to avoid dropping the loading icon before client fully launches
+    await sleep(5000)
+
     playButton.disabled = false
   })
   buttonContainer.append(playButton)
