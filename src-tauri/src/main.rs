@@ -17,9 +17,9 @@ use tauri::{Manager, State};
 use tokio::spawn;
 use tokio::task::{JoinHandle, spawn_blocking};
 
-use crate::proxy::prepare_proxy;
+use crate::http_proxy::prepare_proxy;
 
-mod proxy;
+mod http_proxy;
 
 const SAVED_SERVERS_PATH: &str = "saved-servers.json";
 const USER_SETTINGS_PATH: &str = "settings.json";
