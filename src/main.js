@@ -182,6 +182,10 @@ async function buildSavedServerElement(savedServersElm, savedServer, isEditing) 
   })
   buttonContainer.append(playButton)
 
+  const spinner = document.createElement('div')
+  spinner.classList.add('spinner')
+  buttonContainer.append(spinner)
+
   // Edit container
   const editContainer = document.createElement('div')
   editContainer.classList.add('edit-container')
