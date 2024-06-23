@@ -166,6 +166,10 @@ p {
   background-color: var(--bg-highlight-color);
 }
 
+#saved-servers button:disabled {
+  opacity: 0.5;
+}
+
 #saved-servers > li {
   background: var(--holo-bg);
   border: 1px solid var(--holo-bg-color);
@@ -252,6 +256,41 @@ input, #saved-servers .saved-server-nickname-edit {
 
 #client-list {
   list-style: square;
+}
+
+.spinner {
+  animation: spinner-anim 1s infinite linear;
+  aspect-ratio: 1;
+  border: 3px solid transparent;
+  border-radius: 50%;
+  border-right-color: var(--holo-color);
+  display: grid;
+  opacity: 1;
+  transition: var(--default-transition);
+}
+
+.spinner::before, .spinner::after {
+  animation: spinner-anim 2s infinite;
+  border: inherit;
+  border-radius: 50%;
+  content: "";
+  grid-area: 1/1;
+  margin: 2px;
+}
+
+.spinner::after {
+  animation-duration: 3s;
+  margin: 6px;
+}
+
+@keyframes spinner-anim{
+  100% {
+    transform: rotate(1turn);
+  }
+}
+
+#saved-servers button:enabled + .spinner {
+  opacity: 0;
 }
 
 @font-face {
