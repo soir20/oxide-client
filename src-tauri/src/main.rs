@@ -63,7 +63,7 @@ trait StringError<T> {
 
 impl<T, E: Display> StringError<T> for Result<T, E> {
     fn err_to_string(self, prefix: &str) -> Result<T, String> {
-        self.map_err(|err| format!("{}: {}", prefix, err.to_string()))
+        self.map_err(|err| format!("{}: {}", prefix, err))
     }
 }
 
@@ -82,7 +82,7 @@ fn i18n_value_for_language_id_and_key(languages: &HashMap<String, Language>, lan
 fn i18n_value_for_language_and_key(language: &Language, language_id: &String, key: &String) -> String {
     (
         *language.get(key)
-            .expect(&format!("Requested unknown key {key} for language {language_id}"))
+            .unwrap_or_else(|| panic!("Requested unknown key {key} for language {language_id}"))
     ).clone()
 }
 
@@ -93,7 +93,7 @@ fn write_json_to_app_data<T: Serialize>(value: &T, path: &Path) -> Result<(), St
 
     write(
         path,
-        serde_json::to_vec_pretty(&(*value))
+        serde_json::to_vec_pretty(value)
         .err_to_string("Error while prettifying JSON for app data")?
     ).err_to_string("Error while writing JSON to app data")
 }
@@ -104,14 +104,13 @@ fn save_server_list(saved_servers: &VecDeque<SavedServer>, path: &Path) -> Resul
 
 fn detect_client_version(client_bytes: &[u8]) -> Option<String> {
     let version_regex = Regex::new(r"\d\.\d{3}\.\d\.\d{6}").expect("Unable to compile regex");
-    version_regex.find(&client_bytes).map_or(
-        None,
+    version_regex.find(client_bytes).and_then(
         |mat| String::from_utf8(Vec::from(mat.as_bytes())).ok()
     )
 }
 
-fn remove_missing_clients(settings: &mut Settings, settings_path: &PathBuf) -> Result<(), String> {
-    settings.clients.retain(|_, path| path.try_exists().unwrap_or_else(|_| true));
+fn remove_missing_clients(settings: &mut Settings, settings_path: &Path) -> Result<(), String> {
+    settings.clients.retain(|_, path| path.try_exists().unwrap_or(true));
     write_json_to_app_data(&(*settings), settings_path)
 }
 
@@ -123,8 +122,7 @@ fn list_files(root_dir: &Path, filter: impl Fn(&Path) -> bool) -> io::Result<Vec
 
     while let Some(dir) = directories.pop_front() {
         if dir.is_dir() {
-            let mut entries = read_dir(dir)?;
-            while let Some(entry) = entries.next() {
+            for entry in read_dir(dir)? {
                 let path = entry?.path();
                 if path.is_dir() {
                     directories.push_back(path);
@@ -138,7 +136,7 @@ fn list_files(root_dir: &Path, filter: impl Fn(&Path) -> bool) -> io::Result<Vec
     Ok(files)
 }
 
-fn is_web_downloaded_pack(file_name: &String) -> bool {
+fn is_web_downloaded_pack(file_name: &str) -> bool {
     file_name.contains("W_") && file_name.ends_with(".pack")
 }
 
@@ -157,7 +155,7 @@ fn should_copy(path: &Path) -> bool {
     }
 }
 
-fn prepare_client(proxy_port: u16, client_path: &PathBuf, client_parent: &PathBuf, state: &State<GlobalState>) -> Result<(), String> {
+fn prepare_client(proxy_port: u16, client_path: &Path, client_parent: &Path, state: &State<GlobalState>) -> Result<(), String> {
     create_dir_all(&state.active_client_path).err_to_string("Error while creating active client folder")?;
 
     let active_client_executable_path = state.active_client_path.join(ACTIVE_CLIENT_EXECUTABLE);
@@ -168,7 +166,7 @@ fn prepare_client(proxy_port: u16, client_path: &PathBuf, client_parent: &PathBu
     for path in client_files_to_copy {
         let source = client_parent.join(&path);
         let destination = state.active_client_path.join(&path);
-        create_dir_all(&destination.parent().expect("Active client path has no parent"))
+        create_dir_all(destination.parent().expect("Active client path has no parent"))
             .err_to_string("Error while creating parent folder for file to copy to active client folder")?;
         copy(source, destination).err_to_string("Error while copying file to active client folder")?;
     }
@@ -423,7 +421,7 @@ fn main() {
             let languages_path = app.path_resolver().resolve_resource(I18N_GLOBAL_CONFIG_PATH)
                 .expect("Unable to resolve languages file");
             let languages: HashMap<String, Language> = serde_json::from_slice(
-                &read(&languages_path).expect("Missing languages file")
+                &read(languages_path).expect("Missing languages file")
             ).expect("Bad languages file");
 
             let active_client_path = app_data_dir.join("active_client/");

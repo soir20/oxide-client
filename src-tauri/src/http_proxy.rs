@@ -174,7 +174,7 @@ async fn build_asset_map(
                 .with_file_name(COMPRESSED_MANIFEST_FILE_NAME);
 
             let mut remote_manifest = if let Some(manifest_path_str) = compressed_manifest_path.to_str() {
-                let path_without_slashes = manifest_path_str.replace("\\", "/");
+                let path_without_slashes = manifest_path_str.replace('\\', "/");
                 let remote_data = request_remote_asset(&path_without_slashes, http_client, game_server_url)
                     .await
                     .map(|manifest| manifest.to_vec());
