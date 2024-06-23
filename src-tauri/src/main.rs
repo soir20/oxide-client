@@ -2,6 +2,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use std::collections::{HashMap, VecDeque};
+use std::fmt::Display;
 use std::fs::{copy, create_dir_all, read, read_dir, write};
 use std::io;
 use std::path::{Path, PathBuf};
@@ -56,6 +57,16 @@ struct Settings {
     proxy_port: u16
 }
 
+trait StringError<T> {
+    fn err_to_string(self, prefix: &str) -> Result<T, String>;
+}
+
+impl<T, E: Display> StringError<T> for Result<T, E> {
+    fn err_to_string(self, prefix: &str) -> Result<T, String> {
+        self.map_err(|err| format!("{}: {}", prefix, err.to_string()))
+    }
+}
+
 type Language = HashMap<String, String>;
 
 fn language<'a>(languages: &'a HashMap<String, Language>, language_id: &String) -> &'a Language {
@@ -77,14 +88,14 @@ fn i18n_value_for_language_and_key(language: &Language, language_id: &String, ke
 
 fn write_json_to_app_data<T: Serialize>(value: &T, path: &Path) -> Result<(), String> {
     if let Some(parent) = path.parent() {
-        create_dir_all(parent).map_err(|err| err.to_string())?
+        create_dir_all(parent).err_to_string("Error while creating folder in app data")?
     }
 
     write(
         path,
         serde_json::to_vec_pretty(&(*value))
-            .map_err(|err| err.to_string())?
-    ).map_err(|err| err.to_string())
+        .err_to_string("Error while prettifying JSON for app data")?
+    ).err_to_string("Error while writing JSON to app data")
 }
 
 fn save_server_list(saved_servers: &VecDeque<SavedServer>, path: &Path) -> Result<(), String> {
@@ -147,24 +158,24 @@ fn should_copy(path: &Path) -> bool {
 }
 
 fn prepare_client(proxy_port: u16, client_path: &PathBuf, client_parent: &PathBuf, state: &State<GlobalState>) -> Result<(), String> {
-    create_dir_all(&state.active_client_path).map_err(|err| err.to_string())?;
+    create_dir_all(&state.active_client_path).err_to_string("Error while creating active client folder")?;
 
     let active_client_executable_path = state.active_client_path.join(ACTIVE_CLIENT_EXECUTABLE);
-    copy(client_path, active_client_executable_path).map_err(|err| err.to_string())?;
+    copy(client_path, active_client_executable_path).err_to_string("Error while copying client to active client folder")?;
 
     let client_files_to_copy = list_files(client_parent, should_copy)
-        .map_err(|err| err.to_string())?;
+        .err_to_string("Error while listing files in client folder")?;
     for path in client_files_to_copy {
         let source = client_parent.join(&path);
         let destination = state.active_client_path.join(&path);
         create_dir_all(&destination.parent().expect("Active client path has no parent"))
-            .map_err(|err| err.to_string())?;
-        copy(source, destination).map_err(|err| err.to_string())?;
+            .err_to_string("Error while creating parent folder for file to copy to active client folder")?;
+        copy(source, destination).err_to_string("Error while copying file to active client folder")?;
     }
 
     let user_options_path = state.active_client_path.join(USER_OPTIONS_PATH);
     if !user_options_path.exists() {
-        copy(&state.user_options_template_path, user_options_path).map_err(|err| err.to_string())?;
+        copy(&state.user_options_template_path, user_options_path).err_to_string("Error copying user options to active client folder")?;
     }
 
     let proxy_url = format!("http://127.0.0.1:{}", proxy_port);
@@ -190,7 +201,7 @@ fn prepare_client(proxy_port: u16, client_path: &PathBuf, client_parent: &PathBu
     client_config.with_section(Some("WebResources"))
         .set("GameCrashUrl", proxy_crash_url);
     let client_config_path = state.active_client_path.join(CLIENT_CONFIG_PATH);
-    client_config.write_to_file(client_config_path).map_err(|err| err.to_string())?;
+    client_config.write_to_file(client_config_path).err_to_string("Error writing client config to active client folder")?;
 
     Ok(())
 }
@@ -285,7 +296,7 @@ fn reorder_saved_servers(old_index: usize, new_index: usize, state: State<Global
 
 #[tauri::command]
 fn add_client(path: PathBuf, state: State<GlobalState>) -> Result<String, String> {
-    let client_bytes = read(path.clone()).map_err(|err| err.to_string())?;
+    let client_bytes = read(path.clone()).err_to_string("Error while reading selected CWA client")?;
     detect_client_version(&client_bytes).map_or(
         Err("The selected file is not an original Clone Wars Adventures client from 2014 or earlier.".to_string()),
         |client_version| {
@@ -320,7 +331,7 @@ async fn start_client(index: usize, version: String, state: State<'_, GlobalStat
 
         let udp_endpoint = saved_servers[index].udp_endpoint.clone();
         let https_endpoint = Url::parse(&saved_servers[index].https_endpoint)
-            .map_err(|err| format!("bad HTTPS endpoint: {}", err))?;
+            .err_to_string("Bad HTTPS endpoint")?;
 
         (proxy_port, client_directory, udp_endpoint, https_endpoint)
     };
@@ -337,7 +348,7 @@ async fn start_client(index: usize, version: String, state: State<'_, GlobalStat
 
     let proxy_future = prepare_proxy(proxy_port, &client_directory, https_endpoint)
         .await
-        .map_err(|err| err.to_string())?;
+        .err_to_string("Error while starting HTTP client proxy")?;
 
     let proxy_process = spawn(proxy_future);
 
