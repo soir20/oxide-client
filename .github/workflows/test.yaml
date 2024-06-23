@@ -12,6 +12,10 @@ jobs:
   run-tests:
     runs-on: 'ubuntu-22.04'
     steps:
+      - name: Install libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install libgtk-3-dev
       - name: Checkout
         uses: actions/checkout@cd7d8d697e10461458bc61a30d094dc601a8b017
       - name: Tauri build
