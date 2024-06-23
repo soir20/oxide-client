@@ -1,0 +1,20 @@
+name: 'Build and Test'
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+  pull-requests: read
+concurrency:
+  group: '${{ github.workflow }} @ ${{ github.event.pull_request.head.label || github.head_ref || github.ref }}'
+  cancel-in-progress: true
+jobs:
+  run-tests:
+    runs-on: 'ubuntu-22.04'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@cd7d8d697e10461458bc61a30d094dc601a8b017
+      - name: Run tests
+        run: (cd src-tauri && cargo test)
+      - name: Lint
+        run: (cd src-tauri && cargo clippy -- -Dwarnings -A unused -A clippy::too_many_arguments)
