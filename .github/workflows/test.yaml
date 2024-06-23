@@ -33,3 +33,5 @@ jobs:
         run: (cd src-tauri && cargo test)
       - name: Lint
         run: (cd src-tauri && cargo clippy -- -Dwarnings -A unused -A clippy::too_many_arguments)
+      - name: Check style
+        run: (cd src-tauri && cargo fmt --all --check)
