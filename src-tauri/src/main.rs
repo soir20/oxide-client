@@ -16,7 +16,7 @@ use reqwest::Url;
 use serde::{Deserialize, Serialize};
 use tauri::{Manager, State};
 use tokio::spawn;
-use tokio::task::{JoinHandle, spawn_blocking};
+use tokio::task::{spawn_blocking, JoinHandle};
 
 use crate::http_proxy::prepare_proxy;
 
@@ -40,21 +40,21 @@ struct GlobalState {
     settings: Mutex<Settings>,
     active_client_path: PathBuf,
     user_options_template_path: PathBuf,
-    proxy_process: tokio::sync::Mutex<Option<(JoinHandle<()>, JoinHandle<()>)>>
+    proxy_process: tokio::sync::Mutex<Option<(JoinHandle<()>, JoinHandle<()>)>>,
 }
 
 #[derive(Clone, Deserialize, Serialize)]
 struct SavedServer {
     nickname: String,
     udp_endpoint: String,
-    https_endpoint: String
+    https_endpoint: String,
 }
 
 #[derive(Deserialize, Serialize)]
 struct Settings {
     clients: HashMap<String, PathBuf>,
     language: String,
-    proxy_port: u16
+    proxy_port: u16,
 }
 
 trait StringError<T> {
@@ -70,20 +70,29 @@ impl<T, E: Display> StringError<T> for Result<T, E> {
 type Language = HashMap<String, String>;
 
 fn language<'a>(languages: &'a HashMap<String, Language>, language_id: &String) -> &'a Language {
-    languages.get(language_id)
+    languages
+        .get(language_id)
         .or(languages.get(DEFAULT_LANGUAGE_ID))
         .expect("Missing default language")
 }
 
-fn i18n_value_for_language_id_and_key(languages: &HashMap<String, Language>, language_id: &String, key: &String) -> String {
-   i18n_value_for_language_and_key(language(languages, language_id), language_id, key)
+fn i18n_value_for_language_id_and_key(
+    languages: &HashMap<String, Language>,
+    language_id: &String,
+    key: &String,
+) -> String {
+    i18n_value_for_language_and_key(language(languages, language_id), language_id, key)
 }
 
-fn i18n_value_for_language_and_key(language: &Language, language_id: &String, key: &String) -> String {
-    (
-        *language.get(key)
-            .unwrap_or_else(|| panic!("Requested unknown key {key} for language {language_id}"))
-    ).clone()
+fn i18n_value_for_language_and_key(
+    language: &Language,
+    language_id: &String,
+    key: &String,
+) -> String {
+    (*language
+        .get(key)
+        .unwrap_or_else(|| panic!("Requested unknown key {key} for language {language_id}")))
+    .clone()
 }
 
 fn write_json_to_app_data<T: Serialize>(value: &T, path: &Path) -> Result<(), String> {
@@ -94,8 +103,9 @@ fn write_json_to_app_data<T: Serialize>(value: &T, path: &Path) -> Result<(), St
     write(
         path,
         serde_json::to_vec_pretty(value)
-        .err_to_string("Error while prettifying JSON for app data")?
-    ).err_to_string("Error while writing JSON to app data")
+            .err_to_string("Error while prettifying JSON for app data")?,
+    )
+    .err_to_string("Error while writing JSON to app data")
 }
 
 fn save_server_list(saved_servers: &VecDeque<SavedServer>, path: &Path) -> Result<(), String> {
@@ -104,13 +114,15 @@ fn save_server_list(saved_servers: &VecDeque<SavedServer>, path: &Path) -> Resul
 
 fn detect_client_version(client_bytes: &[u8]) -> Option<String> {
     let version_regex = Regex::new(r"\d\.\d{3}\.\d\.\d{6}").expect("Unable to compile regex");
-    version_regex.find(client_bytes).and_then(
-        |mat| String::from_utf8(Vec::from(mat.as_bytes())).ok()
-    )
+    version_regex
+        .find(client_bytes)
+        .and_then(|mat| String::from_utf8(Vec::from(mat.as_bytes())).ok())
 }
 
 fn remove_missing_clients(settings: &mut Settings, settings_path: &Path) -> Result<(), String> {
-    settings.clients.retain(|_, path| path.try_exists().unwrap_or(true));
+    settings
+        .clients
+        .retain(|_, path| path.try_exists().unwrap_or(true));
     write_json_to_app_data(&(*settings), settings_path)
 }
 
@@ -155,25 +167,40 @@ fn should_copy(path: &Path) -> bool {
     }
 }
 
-fn prepare_client(proxy_port: u16, client_path: &Path, client_parent: &Path, state: &State<GlobalState>) -> Result<(), String> {
-    create_dir_all(&state.active_client_path).err_to_string("Error while creating active client folder")?;
+fn prepare_client(
+    proxy_port: u16,
+    client_path: &Path,
+    client_parent: &Path,
+    state: &State<GlobalState>,
+) -> Result<(), String> {
+    create_dir_all(&state.active_client_path)
+        .err_to_string("Error while creating active client folder")?;
 
     let active_client_executable_path = state.active_client_path.join(ACTIVE_CLIENT_EXECUTABLE);
-    copy(client_path, active_client_executable_path).err_to_string("Error while copying client to active client folder")?;
+    copy(client_path, active_client_executable_path)
+        .err_to_string("Error while copying client to active client folder")?;
 
     let client_files_to_copy = list_files(client_parent, should_copy)
         .err_to_string("Error while listing files in client folder")?;
     for path in client_files_to_copy {
         let source = client_parent.join(&path);
         let destination = state.active_client_path.join(&path);
-        create_dir_all(destination.parent().expect("Active client path has no parent"))
-            .err_to_string("Error while creating parent folder for file to copy to active client folder")?;
-        copy(source, destination).err_to_string("Error while copying file to active client folder")?;
+        create_dir_all(
+            destination
+                .parent()
+                .expect("Active client path has no parent"),
+        )
+        .err_to_string(
+            "Error while creating parent folder for file to copy to active client folder",
+        )?;
+        copy(source, destination)
+            .err_to_string("Error while copying file to active client folder")?;
     }
 
     let user_options_path = state.active_client_path.join(USER_OPTIONS_PATH);
     if !user_options_path.exists() {
-        copy(&state.user_options_template_path, user_options_path).err_to_string("Error copying user options to active client folder")?;
+        copy(&state.user_options_template_path, user_options_path)
+            .err_to_string("Error copying user options to active client folder")?;
     }
 
     let proxy_url = format!("http://127.0.0.1:{}", proxy_port);
@@ -181,44 +208,61 @@ fn prepare_client(proxy_port: u16, client_path: &Path, client_parent: &Path, sta
     let proxy_card_assets_url = format!("{}/card_games/", proxy_assets_url);
     let proxy_crash_url = format!("{}/crash?code=G", proxy_url);
     let mut client_config = Ini::new();
-    client_config.with_section::<String>(None)
-        .set("World", "");
-    client_config.with_section(Some("Paths"))
+    client_config.with_section::<String>(None).set("World", "");
+    client_config
+        .with_section(Some("Paths"))
         .set("PathScripts", "./Resources/Scripts/")
         .set("PathUiModules", "./UI/UiModules/");
-    client_config.with_section(Some("Libraries"))
+    client_config
+        .with_section(Some("Libraries"))
         .set("GraphicsDLL", "./GraphicsDriver.dll")
         .set("GraphicsDLLd", "./GraphicsDriver.dll")
         .set("GraphicsDllDataPath", "./");
-    client_config.with_section(Some("AssetDelivery"))
+    client_config
+        .with_section(Some("AssetDelivery"))
         .set("IndirectEnabled", "1")
         .set("IndirectServerAddress", proxy_assets_url)
         .set("TcgServerAddress", proxy_card_assets_url);
-    client_config.with_section(Some("LoadingScreen"))
+    client_config
+        .with_section(Some("LoadingScreen"))
         .set("LoadingScreenMusicId", "1144");
-    client_config.with_section(Some("WebResources"))
+    client_config
+        .with_section(Some("WebResources"))
         .set("GameCrashUrl", proxy_crash_url);
     let client_config_path = state.active_client_path.join(CLIENT_CONFIG_PATH);
-    client_config.write_to_file(client_config_path).err_to_string("Error writing client config to active client folder")?;
+    client_config
+        .write_to_file(client_config_path)
+        .err_to_string("Error writing client config to active client folder")?;
 
     Ok(())
 }
 
 #[tauri::command]
 fn current_language_id(state: State<GlobalState>) -> String {
-    state.settings.lock().expect("Unable to lock settings")
+    state
+        .settings
+        .lock()
+        .expect("Unable to lock settings")
         .language
         .clone()
 }
 
 #[tauri::command]
 fn all_language_ids_names(state: State<GlobalState>) -> Vec<(String, String)> {
-    state.languages.iter().map(|(language_id, language)|
-        (
-            (*language_id).clone(),
-            i18n_value_for_language_and_key(language, language_id, &LANGUAGE_NAME_KEY.to_string())
-        )
-    ).collect()
+    state
+        .languages
+        .iter()
+        .map(|(language_id, language)| {
+            (
+                (*language_id).clone(),
+                i18n_value_for_language_and_key(
+                    language,
+                    language_id,
+                    &LANGUAGE_NAME_KEY.to_string(),
+                ),
+            )
+        })
+        .collect()
 }
 
 #[tauri::command]
@@ -230,37 +274,64 @@ fn set_language(new_language_id: String, state: State<GlobalState>) -> Result<()
 
 #[tauri::command]
 fn i18n_value_for_key(key: String, state: State<GlobalState>) -> String {
-    let language_id = &state.settings.lock().expect("Unable to lock settings")
+    let language_id = &state
+        .settings
+        .lock()
+        .expect("Unable to lock settings")
         .language;
     i18n_value_for_language_id_and_key(&state.languages, language_id, &key)
 }
 
 #[tauri::command]
 fn load_saved_servers(state: State<GlobalState>) -> VecDeque<SavedServer> {
-    let saved_servers = state.inner().saved_servers.lock()
+    let saved_servers = state
+        .inner()
+        .saved_servers
+        .lock()
         .expect("Unable to lock saved servers");
     (*saved_servers).clone()
 }
 
 #[tauri::command]
-fn set_saved_server_nickname(index: usize, nickname: String, state: State<GlobalState>) -> Result<(), String> {
-    let mut saved_servers = state.inner().saved_servers.lock()
+fn set_saved_server_nickname(
+    index: usize,
+    nickname: String,
+    state: State<GlobalState>,
+) -> Result<(), String> {
+    let mut saved_servers = state
+        .inner()
+        .saved_servers
+        .lock()
         .expect("Unable to lock saved servers");
     saved_servers[index].nickname = nickname;
     save_server_list(&saved_servers, &state.saved_servers_path)
 }
 
 #[tauri::command]
-fn set_saved_server_udp_endpoint(index: usize, udp_endpoint: String, state: State<GlobalState>) -> Result<(), String> {
-    let mut saved_servers = state.inner().saved_servers.lock()
+fn set_saved_server_udp_endpoint(
+    index: usize,
+    udp_endpoint: String,
+    state: State<GlobalState>,
+) -> Result<(), String> {
+    let mut saved_servers = state
+        .inner()
+        .saved_servers
+        .lock()
         .expect("Unable to lock saved servers");
     saved_servers[index].udp_endpoint = udp_endpoint;
     save_server_list(&saved_servers, &state.saved_servers_path)
 }
 
 #[tauri::command]
-fn set_saved_server_https_endpoint(index: usize, https_endpoint: String, state: State<GlobalState>) -> Result<(), String> {
-    let mut saved_servers = state.inner().saved_servers.lock()
+fn set_saved_server_https_endpoint(
+    index: usize,
+    https_endpoint: String,
+    state: State<GlobalState>,
+) -> Result<(), String> {
+    let mut saved_servers = state
+        .inner()
+        .saved_servers
+        .lock()
         .expect("Unable to lock saved servers");
     saved_servers[index].https_endpoint = https_endpoint;
     save_server_list(&saved_servers, &state.saved_servers_path)
@@ -268,7 +339,10 @@ fn set_saved_server_https_endpoint(index: usize, https_endpoint: String, state: 
 
 #[tauri::command]
 fn add_saved_server(saved_server: SavedServer, state: State<GlobalState>) -> Result<(), String> {
-    let mut saved_servers = state.inner().saved_servers.lock()
+    let mut saved_servers = state
+        .inner()
+        .saved_servers
+        .lock()
         .expect("Unable to lock saved servers");
     saved_servers.push_front(saved_server);
     save_server_list(&saved_servers, &state.saved_servers_path)
@@ -276,17 +350,28 @@ fn add_saved_server(saved_server: SavedServer, state: State<GlobalState>) -> Res
 
 #[tauri::command]
 fn remove_saved_server(index: usize, state: State<GlobalState>) -> Result<(), String> {
-    let mut saved_servers = state.inner().saved_servers.lock()
+    let mut saved_servers = state
+        .inner()
+        .saved_servers
+        .lock()
         .expect("Unable to lock saved servers");
     saved_servers.remove(index);
     save_server_list(&saved_servers, &state.saved_servers_path)
 }
 
 #[tauri::command]
-fn reorder_saved_servers(old_index: usize, new_index: usize, state: State<GlobalState>) -> Result<(), String> {
-    let mut saved_servers = state.inner().saved_servers.lock()
+fn reorder_saved_servers(
+    old_index: usize,
+    new_index: usize,
+    state: State<GlobalState>,
+) -> Result<(), String> {
+    let mut saved_servers = state
+        .inner()
+        .saved_servers
+        .lock()
         .expect("Unable to lock saved servers");
-    let saved_server = saved_servers.remove(old_index)
+    let saved_server = saved_servers
+        .remove(old_index)
         .expect("Tried to reorder non-existent server");
     saved_servers.insert(new_index, saved_server);
     save_server_list(&saved_servers, &state.saved_servers_path)
@@ -294,7 +379,8 @@ fn reorder_saved_servers(old_index: usize, new_index: usize, state: State<Global
 
 #[tauri::command]
 fn add_client(path: PathBuf, state: State<GlobalState>) -> Result<String, String> {
-    let client_bytes = read(path.clone()).err_to_string("Error while reading selected CWA client")?;
+    let client_bytes =
+        read(path.clone()).err_to_string("Error while reading selected CWA client")?;
     detect_client_version(&client_bytes).map_or(
         Err("The selected file is not an original Clone Wars Adventures client from 2014 or earlier.".to_string()),
         |client_version| {
@@ -310,26 +396,47 @@ fn add_client(path: PathBuf, state: State<GlobalState>) -> Result<String, String
 
 #[tauri::command]
 fn list_clients(state: State<GlobalState>) -> Vec<(String, PathBuf)> {
-    let settings = state.inner().settings.lock().expect("Unable to lock settings");
+    let settings = state
+        .inner()
+        .settings
+        .lock()
+        .expect("Unable to lock settings");
     settings.clients.clone().into_iter().collect()
 }
 
 #[tauri::command]
-async fn start_client(index: usize, version: String, state: State<'_, GlobalState>) -> Result<(), String> {
+async fn start_client(
+    index: usize,
+    version: String,
+    state: State<'_, GlobalState>,
+) -> Result<(), String> {
     let (proxy_port, client_directory, udp_endpoint, https_endpoint) = {
-        let settings = state.inner().settings.lock().expect("Unable to lock settings");
+        let settings = state
+            .inner()
+            .settings
+            .lock()
+            .expect("Unable to lock settings");
 
         let proxy_port = settings.proxy_port;
-        let client_path = settings.clients.get(&version).ok_or("Requested client version that does not exist")?;
-        let client_directory = client_path.parent().ok_or("Client has no parent directory")?.to_path_buf();
+        let client_path = settings
+            .clients
+            .get(&version)
+            .ok_or("Requested client version that does not exist")?;
+        let client_directory = client_path
+            .parent()
+            .ok_or("Client has no parent directory")?
+            .to_path_buf();
         prepare_client(proxy_port, client_path, &client_directory, &state)?;
-        
-        let saved_servers = state.inner().saved_servers.lock()
+
+        let saved_servers = state
+            .inner()
+            .saved_servers
+            .lock()
             .expect("Unable to lock saved servers");
 
         let udp_endpoint = saved_servers[index].udp_endpoint.clone();
-        let https_endpoint = Url::parse(&saved_servers[index].https_endpoint)
-            .err_to_string("Bad HTTPS endpoint")?;
+        let https_endpoint =
+            Url::parse(&saved_servers[index].https_endpoint).err_to_string("Bad HTTPS endpoint")?;
 
         (proxy_port, client_directory, udp_endpoint, https_endpoint)
     };
@@ -374,11 +481,11 @@ async fn start_client(index: usize, version: String, state: State<'_, GlobalStat
                             String::from_utf8_lossy(&output.stdout),
                             String::from_utf8_lossy(&output.stderr)
                         );
-                    },
-                    Err(err) => println!("Failed to wait for client to finish: {}", err)
+                    }
+                    Err(err) => println!("Failed to wait for client to finish: {}", err),
                 }
-            },
-            Err(err) => println!("Client failed to start: {}", err)
+            }
+            Err(err) => println!("Client failed to start: {}", err),
         }
     });
 
@@ -390,7 +497,9 @@ async fn start_client(index: usize, version: String, state: State<'_, GlobalStat
 fn main() {
     tauri::Builder::default()
         .setup(|app| {
-            let app_data_dir = app.path_resolver().app_data_dir()
+            let app_data_dir = app
+                .path_resolver()
+                .app_data_dir()
                 .expect("Unable to resolve app data directory");
 
             let saved_servers_path = app_data_dir.join(SAVED_SERVERS_PATH);
@@ -415,17 +524,24 @@ fn main() {
                 }
             };
             if let Err(err) = remove_missing_clients(&mut settings, &settings_path) {
-                println!("Unable to save settings file after removing missing clients: {}", err);
+                println!(
+                    "Unable to save settings file after removing missing clients: {}",
+                    err
+                );
             }
 
-            let languages_path = app.path_resolver().resolve_resource(I18N_GLOBAL_CONFIG_PATH)
+            let languages_path = app
+                .path_resolver()
+                .resolve_resource(I18N_GLOBAL_CONFIG_PATH)
                 .expect("Unable to resolve languages file");
-            let languages: HashMap<String, Language> = serde_json::from_slice(
-                &read(languages_path).expect("Missing languages file")
-            ).expect("Bad languages file");
+            let languages: HashMap<String, Language> =
+                serde_json::from_slice(&read(languages_path).expect("Missing languages file"))
+                    .expect("Bad languages file");
 
             let active_client_path = app_data_dir.join("active_client/");
-            let user_options_template_path = app.path_resolver().resolve_resource(USER_OPTIONS_TEMPLATE_PATH)
+            let user_options_template_path = app
+                .path_resolver()
+                .resolve_resource(USER_OPTIONS_TEMPLATE_PATH)
                 .expect("Unable to resolve user options template file");
 
             app.manage(GlobalState {

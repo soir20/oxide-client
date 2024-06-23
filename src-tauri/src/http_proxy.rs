@@ -5,18 +5,18 @@ use std::io::{ErrorKind, SeekFrom};
 use std::path::{Component, PathBuf};
 use std::sync::Arc;
 
-use axum::{Router, serve};
 use axum::extract::{Path, Request, State};
 use axum::http::StatusCode;
 use axum::routing::get;
+use axum::{serve, Router};
 use bytes::Bytes;
 use miniz_oxide::deflate::compress_to_vec_zlib;
 use miniz_oxide::inflate::{decompress_to_vec_zlib, DecompressError, TINFLStatus};
 use reqwest::{Client, Url};
-use tokio::{io, spawn};
-use tokio::fs::{OpenOptions, read, read_dir};
+use tokio::fs::{read, read_dir, OpenOptions};
 use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 use tokio::net::TcpListener;
+use tokio::{io, spawn};
 
 const COMPRESSED_MAGIC: u32 = 0xa1b2c3d4;
 const ZLIB_COMPRESSION_LEVEL: u8 = 6;
@@ -59,12 +59,12 @@ struct Asset {
 
 struct AssetLocator {
     crc: u32,
-    kind: AssetLocatorKind
+    kind: AssetLocatorKind,
 }
 
 enum AssetLocatorKind {
     Memory(MemoryAssetLocator),
-    File(FileAssetLocator)
+    File(FileAssetLocator),
 }
 
 struct MemoryAssetLocator {
@@ -80,10 +80,7 @@ struct FileAssetLocator {
 type AssetMap = HashMap<PathBuf, AssetLocator>;
 
 async fn list_assets_in_pack(pack_path: PathBuf) -> io::Result<(PathBuf, Vec<Asset>)> {
-    let mut file = OpenOptions::new()
-        .read(true)
-        .open(&pack_path)
-        .await?;
+    let mut file = OpenOptions::new().read(true).open(&pack_path).await?;
 
     let mut results = Vec::new();
     loop {
@@ -94,9 +91,8 @@ async fn list_assets_in_pack(pack_path: PathBuf) -> io::Result<(PathBuf, Vec<Ass
             let name_len = file.read_u32().await?;
             let mut name_buffer = vec![0; name_len as usize];
             file.read_exact(&mut name_buffer).await?;
-            let name = PathBuf::from(
-                String::from_utf8(name_buffer).map_err(|_| ErrorKind::InvalidData)?
-            );
+            let name =
+                PathBuf::from(String::from_utf8(name_buffer).map_err(|_| ErrorKind::InvalidData)?);
 
             let data_offset = file.read_u32().await? as u64;
             let size = file.read_u32().await?;
@@ -122,12 +118,15 @@ async fn list_assets_in_pack(pack_path: PathBuf) -> io::Result<(PathBuf, Vec<Ass
 
 fn file_name_ends_with(path: &std::path::Path, suffix: &str) -> bool {
     path.file_name()
-        .map(|file_name| file_name.to_os_string()
-            .into_string()
-            .ok()
-            .map(|file_str| file_str.ends_with(suffix))
-            .unwrap_or(false)
-        ).unwrap_or(false)
+        .map(|file_name| {
+            file_name
+                .to_os_string()
+                .into_string()
+                .ok()
+                .map(|file_str| file_str.ends_with(suffix))
+                .unwrap_or(false)
+        })
+        .unwrap_or(false)
 }
 
 fn decompress_asset_response(file_data: Vec<u8>) -> Result<Vec<u8>, DecompressError> {
@@ -145,7 +144,7 @@ fn decompress_asset_response(file_data: Vec<u8>) -> Result<Vec<u8>, DecompressEr
 async fn build_asset_map(
     client_folder: &std::path::Path,
     http_client: &Arc<Client>,
-    game_server_url: &Arc<Url>
+    game_server_url: &Arc<Url>,
 ) -> io::Result<AssetMap> {
     let mut asset_map = HashMap::new();
     let mut tasks = Vec::new();
@@ -160,24 +159,29 @@ async fn build_asset_map(
 
         // Exclude extraneous files exactly named "manifest.txt" because we rename the
         // real manifests to "manifest.txt"
-        if path.file_name().map(|file_name| file_name == MANIFEST_FILE_NAME).unwrap_or(false) {
+        if path
+            .file_name()
+            .map(|file_name| file_name == MANIFEST_FILE_NAME)
+            .unwrap_or(false)
+        {
             continue;
         }
 
         let mut file_data = read(&path).await?;
 
-        let path_without_prefix = path.strip_prefix(client_folder)
-            .unwrap()
-            .to_path_buf();
+        let path_without_prefix = path.strip_prefix(client_folder).unwrap().to_path_buf();
         if file_name_ends_with(&path_without_prefix, MANIFEST_SUFFIX) {
-            let compressed_manifest_path = path_without_prefix
-                .with_file_name(COMPRESSED_MANIFEST_FILE_NAME);
+            let compressed_manifest_path =
+                path_without_prefix.with_file_name(COMPRESSED_MANIFEST_FILE_NAME);
 
-            let mut remote_manifest = if let Some(manifest_path_str) = compressed_manifest_path.to_str() {
+            let mut remote_manifest = if let Some(manifest_path_str) =
+                compressed_manifest_path.to_str()
+            {
                 let path_without_slashes = manifest_path_str.replace('\\', "/");
-                let remote_data = request_remote_asset(&path_without_slashes, http_client, game_server_url)
-                    .await
-                    .map(|manifest| manifest.to_vec());
+                let remote_data =
+                    request_remote_asset(&path_without_slashes, http_client, game_server_url)
+                        .await
+                        .map(|manifest| manifest.to_vec());
                 if let Ok(remote_manifest) = remote_data {
                     decompress_asset_response(remote_manifest)
                         .map_err(|err| io::Error::new(ErrorKind::InvalidData, err.to_string()))?
@@ -191,33 +195,41 @@ async fn build_asset_map(
             file_data.append(&mut remote_manifest);
             let crc = crc32fast::hash(&file_data);
 
-            let manifest_path = path_without_prefix
-                .with_file_name(MANIFEST_FILE_NAME);
-            asset_map.insert(manifest_path, AssetLocator {
-                crc,
-                kind: AssetLocatorKind::Memory(MemoryAssetLocator { data: file_data })
-            });
+            let manifest_path = path_without_prefix.with_file_name(MANIFEST_FILE_NAME);
+            asset_map.insert(
+                manifest_path,
+                AssetLocator {
+                    crc,
+                    kind: AssetLocatorKind::Memory(MemoryAssetLocator { data: file_data }),
+                },
+            );
 
             let manifest_crc_path = path_without_prefix.with_file_name(MANIFEST_CRC_FILE_NAME);
             let crc_file_data = crc.to_string().as_bytes().to_vec();
-            asset_map.insert(manifest_crc_path, AssetLocator {
-                crc: crc32fast::hash(&crc_file_data),
-                kind: AssetLocatorKind::Memory(MemoryAssetLocator { data: crc_file_data })
-            });
+            asset_map.insert(
+                manifest_crc_path,
+                AssetLocator {
+                    crc: crc32fast::hash(&crc_file_data),
+                    kind: AssetLocatorKind::Memory(MemoryAssetLocator {
+                        data: crc_file_data,
+                    }),
+                },
+            );
         } else if !file_name_ends_with(&path_without_prefix, MANIFEST_CRC_FILE_NAME) {
             let crc = crc32fast::hash(&file_data);
 
             // Always overwrite in-pack assets with assets outside a pack
-            asset_map.insert(path_without_prefix, AssetLocator {
-                crc,
-                kind: AssetLocatorKind::File(
-                    FileAssetLocator {
+            asset_map.insert(
+                path_without_prefix,
+                AssetLocator {
+                    crc,
+                    kind: AssetLocatorKind::File(FileAssetLocator {
                         path,
                         data_offset: 0,
                         size: file_data.len() as u32,
-                    }
-                )
-            });
+                    }),
+                },
+            );
         }
     }
 
@@ -226,13 +238,11 @@ async fn build_asset_map(
         for asset in assets {
             asset_map.entry(asset.name).or_insert(AssetLocator {
                 crc: asset.crc,
-                kind: AssetLocatorKind::File(
-                    FileAssetLocator {
-                        path: path.clone(),
-                        data_offset: asset.data_offset,
-                        size: asset.size,
-                    }
-                ),
+                kind: AssetLocatorKind::File(FileAssetLocator {
+                    path: path.clone(),
+                    data_offset: asset.data_offset,
+                    size: asset.size,
+                }),
             });
         }
     }
@@ -241,14 +251,18 @@ async fn build_asset_map(
 }
 
 fn decompose_extension(asset_name: &std::path::Path) -> (PathBuf, bool, Option<u32>) {
-    let possible_extension_str = asset_name.extension()
+    let possible_extension_str = asset_name
+        .extension()
         .map(|extension| extension.to_os_string().into_string().ok())
         .unwrap_or(None);
     let (non_crc_asset_name, crc) = if let Some(extension_str) = possible_extension_str {
         let extension_split = extension_str.rsplit_once(CRC_EXTENSION_SEPARATOR);
 
         if let Some((real_extension, crc_str)) = extension_split {
-            (asset_name.with_extension(real_extension), crc_str.parse::<u32>().ok())
+            (
+                asset_name.with_extension(real_extension),
+                crc_str.parse::<u32>().ok(),
+            )
         } else {
             (asset_name.to_path_buf(), None)
         }
@@ -256,7 +270,8 @@ fn decompose_extension(asset_name: &std::path::Path) -> (PathBuf, bool, Option<u
         (asset_name.to_path_buf(), None)
     };
 
-    let compressed = non_crc_asset_name.extension()
+    let compressed = non_crc_asset_name
+        .extension()
         .map(|extension| extension == COMPRESSED_EXTENSION)
         .unwrap_or(false);
     let uncompressed_asset_name = if compressed {
@@ -265,26 +280,21 @@ fn decompose_extension(asset_name: &std::path::Path) -> (PathBuf, bool, Option<u
         non_crc_asset_name.to_path_buf()
     };
 
-    (
-        uncompressed_asset_name,
-        compressed,
-        crc
-    )
+    (uncompressed_asset_name, compressed, crc)
 }
 
-async fn build_local_asset_response(asset_locator: &AssetLocator, compress: bool) -> io::Result<Vec<u8>> {
+async fn build_local_asset_response(
+    asset_locator: &AssetLocator,
+    compress: bool,
+) -> io::Result<Vec<u8>> {
     let mut buffer = Vec::new();
 
     let mut file_buffer = match &asset_locator.kind {
         AssetLocatorKind::Memory(locator) => locator.data.clone(),
         AssetLocatorKind::File(locator) => {
             // Read file from local client folder
-            let mut file = OpenOptions::new()
-                .read(true)
-                .open(&locator.path)
-                .await?;
-            file.seek(SeekFrom::Start(locator.data_offset))
-                .await?;
+            let mut file = OpenOptions::new().read(true).open(&locator.path).await?;
+            file.seek(SeekFrom::Start(locator.data_offset)).await?;
 
             let mut file_buffer = vec![0; locator.size as usize];
             file.read_exact(&mut file_buffer).await?;
@@ -294,9 +304,7 @@ async fn build_local_asset_response(asset_locator: &AssetLocator, compress: bool
 
     if compress {
         buffer.write_u32(COMPRESSED_MAGIC).await?;
-        buffer
-            .write_u32(file_buffer.len() as u32)
-            .await?;
+        buffer.write_u32(file_buffer.len() as u32).await?;
         buffer.append(&mut compress_to_vec_zlib(
             &file_buffer,
             ZLIB_COMPRESSION_LEVEL,
@@ -311,23 +319,24 @@ async fn build_local_asset_response(asset_locator: &AssetLocator, compress: bool
 async fn request_remote_asset(
     path_and_query: &str,
     http_client: &Arc<Client>,
-    game_server_url: &Arc<Url>
+    game_server_url: &Arc<Url>,
 ) -> Result<Bytes, StatusCode> {
-    let url = game_server_url.join("assets/").and_then(|path| path.join(path_and_query))
+    let url = game_server_url
+        .join("assets/")
+        .and_then(|path| path.join(path_and_query))
         .map_err(|_| StatusCode::BAD_REQUEST)?;
 
-    let response = http_client.get(url)
+    let response = http_client
+        .get(url)
         .send()
         .await
         .map_err(|err| err.status().unwrap_or(StatusCode::INTERNAL_SERVER_ERROR))?;
 
     match response.status() {
-        StatusCode::OK => Ok(
-            response
-                .bytes()
-                .await
-                .map_err(|err| err.status().unwrap_or(StatusCode::INTERNAL_SERVER_ERROR))?
-        ),
+        StatusCode::OK => Ok(response
+            .bytes()
+            .await
+            .map_err(|err| err.status().unwrap_or(StatusCode::INTERNAL_SERVER_ERROR))?),
         status_code => Err(status_code),
     }
 }
@@ -337,7 +346,7 @@ async fn retrieve_asset(
     http_client: Arc<Client>,
     asset_map: Arc<AssetMap>,
     game_server_url: Arc<Url>,
-    request: Request
+    request: Request,
 ) -> Result<Bytes, StatusCode> {
     // SECURITY: Ensure that the path is within the assets cache before returning any data.
     // Reject all paths containing anything other than normal folder names (e.g. paths containing
@@ -354,7 +363,9 @@ async fn retrieve_asset(
     let possible_file_data = if let Some(asset_locator) = asset_map.get(&uncompressed_asset_name) {
         let crc = queried_crc.unwrap_or(asset_locator.crc);
         if crc == asset_locator.crc {
-            build_local_asset_response(asset_locator, compress).await.ok()
+            build_local_asset_response(asset_locator, compress)
+                .await
+                .ok()
         } else {
             None
         }
@@ -369,10 +380,13 @@ async fn retrieve_asset(
         let path_and_query = request
             .uri()
             .path_and_query()
-            .map(|path_and_query| path_and_query.path()
-                .strip_prefix("/assets/")
-                .expect("Assets request is missing /assets prefix")
-            ).unwrap_or(request_path);
+            .map(|path_and_query| {
+                path_and_query
+                    .path()
+                    .strip_prefix("/assets/")
+                    .expect("Assets request is missing /assets prefix")
+            })
+            .unwrap_or(request_path);
         request_remote_asset(path_and_query, &http_client, &game_server_url).await
     }
 }
@@ -381,16 +395,16 @@ fn is_name_hash(component: &OsStr) -> bool {
     let is_hash_length = component.len() == 3;
     is_hash_length
         && if let Ok(comp_str) = component.to_os_string().into_string() {
-        comp_str.parse::<u16>().is_ok()
-    } else {
-        false
-    }
+            comp_str.parse::<u16>().is_ok()
+        } else {
+            false
+        }
 }
 
 async fn asset_handler(
     Path(asset): Path<PathBuf>,
     State((http_client, asset_map, game_server_url)): State<(Arc<Client>, Arc<AssetMap>, Arc<Url>)>,
-    request: Request
+    request: Request,
 ) -> Result<Bytes, StatusCode> {
     let is_first_component_name_hash = asset.iter().next().map(is_name_hash).unwrap_or(false);
 
@@ -410,7 +424,11 @@ async fn start_proxy(listener: TcpListener, app: Router) {
     serve(listener, app).await.expect("Unable to start proxy");
 }
 
-pub async fn prepare_proxy(port: u16, client_folder: &std::path::Path, game_server_uri: Url) -> io::Result<impl Future<Output=()>> {
+pub async fn prepare_proxy(
+    port: u16,
+    client_folder: &std::path::Path,
+    game_server_uri: Url,
+) -> io::Result<impl Future<Output = ()>> {
     let client = Client::new();
     let client_arc = Arc::new(client);
     let game_server_url_arc = Arc::new(game_server_uri.clone());
@@ -419,8 +437,10 @@ pub async fn prepare_proxy(port: u16, client_folder: &std::path::Path, game_serv
         .route("/assets/*asset", get(asset_handler))
         .with_state((client_arc, Arc::new(asset_map), game_server_url_arc));
 
-    let listener = TcpListener::bind(format!("127.0.0.1:{}", port))
-        .await?;
-    println!("Proxy listening on {}", listener.local_addr().expect("Listener has no address"));
+    let listener = TcpListener::bind(format!("127.0.0.1:{}", port)).await?;
+    println!(
+        "Proxy listening on {}",
+        listener.local_addr().expect("Listener has no address")
+    );
     Ok(start_proxy(listener, app))
 }
